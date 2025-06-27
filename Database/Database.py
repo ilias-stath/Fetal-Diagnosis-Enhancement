@@ -47,8 +47,8 @@ class Admin(User):
     #     deleteUser(self.id,self.idP,self.role)
     #     print("User deleted successfully\n")
 
-    def delete(self):
-        deleteUser(self.id,self.idP,self.role)
+    def delete(self,idU):
+        deleteUser(idU)
         print("User deleted successfully\n")
 
 
@@ -115,9 +115,9 @@ class Medical(User):
             self.idP = super().storeUser()
 
 
-    def delete(self):
-        deleteUser(self.id,self.idP,self.role)
-        print("User deleted successfully\n")
+    # def delete(self):
+    #     deleteUser(self.id,self.idP,self.role)
+    #     print("User deleted successfully\n")
 
 
     def getResults(self, pName):
@@ -460,7 +460,7 @@ def updateUserInfo(userObj, updates: dict):
             hashed_password = bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt())
             value = hashed_password.decode('utf-8')
             updates[field] = value  # update the dictionary with the hashed password
-            
+
         if hasattr(userObj, field):
             setattr(userObj, field, value)
 
@@ -495,9 +495,16 @@ def updateUserInfo(userObj, updates: dict):
 
 
     
-def deleteUser(idU,idP,role):
+def deleteUser(idU):
     conn = connect()
     cursor = conn.cursor()
+
+
+    query = 'SELECT role FROM user WHERE id = %s'
+    cursor.execute(query, (idU,))
+    result = cursor.fetchone()
+
+    role = result[0]
 
     query = "DELETE FROM users WHERE id = %s"
     cursor.execute(query, (idU,))
