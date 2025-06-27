@@ -451,9 +451,16 @@ def getUsers(fullName,id):
 
     return result
 
+
 def updateUserInfo(userObj, updates: dict):
     # Update user object's attributes
     for field, value in updates.items():
+        if field == "password":
+            # Hash the password
+            hashed_password = bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt())
+            value = hashed_password.decode('utf-8')
+            updates[field] = value  # update the dictionary with the hashed password
+            
         if hasattr(userObj, field):
             setattr(userObj, field, value)
 
