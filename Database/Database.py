@@ -357,7 +357,7 @@ def createUser(fullName, username, password, role, telephone, email, adress, des
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
     query = """
-        INSERT INTO users (fullName, username, password, role, telephone, email, adress) 
+        INSERT INTO users (fullName, username, password, role, telephone, email, address) 
         VALUES (%s, %s, %s, %s, %s, %s, %s)
     """
 
@@ -453,6 +453,9 @@ def getUsers(fullName,id):
 
 
 def updateUserInfo(userObj, updates: dict):
+
+    print(updates)
+
     # Update user object's attributes
     for field, value in updates.items():
         if field == "password":
@@ -461,13 +464,18 @@ def updateUserInfo(userObj, updates: dict):
             value = hashed_password.decode('utf-8')
             updates[field] = value  # update the dictionary with the hashed password
 
-        if hasattr(userObj, field):
-            setattr(userObj, field, value)
+        if field != "description":
+            if hasattr(userObj, field):
+                setattr(userObj, field, value)
+        else:
+            userObj.description = value
+            del updates[field]
 
     # Prepare the SQL query
     set_clause = ", ".join(f"{field} = %s" for field in updates.keys())
     values = list(updates.values())
     values.append(userObj.id)  # For WHERE clause
+
 
     query = f"UPDATE users SET {set_clause} WHERE id = %s"
 
@@ -500,7 +508,7 @@ def deleteUser(idU):
     cursor = conn.cursor()
 
 
-    query = 'SELECT role FROM user WHERE id = %s'
+    query = 'SELECT role FROM users WHERE id = %s'
     cursor.execute(query, (idU,))
     result = cursor.fetchone()
 
@@ -543,7 +551,7 @@ def deleteUser(idU):
     
 #     # Update user info using admin
 #     Admin.updateUser(user, {
-#         "address": "Kozani",
+#         "username": "konnos_pap",
 #     })
 
 
