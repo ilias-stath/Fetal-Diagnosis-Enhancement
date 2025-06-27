@@ -132,10 +132,38 @@ class Medical(User):
                 patientName=row[1],
                 fetalHealth=row[2],
                 parameters=row[4],
-                idMedical=row[3]
+                idMedical=row[3],
+                idMo=row[6],
+                image1=row[7],
+                image2=row[8]
             )
             result.id = row[0]
             results_list.append(result)
+
+        return results_list
+    
+
+
+    def getModels(self,name,idM):
+        raw_results = getModels(name, idM)
+
+        if raw_results == -1:
+            return []
+
+        results_list = []
+        for row in raw_results:
+            print("PPAAAPP")
+            # model = Models(
+            #     patientName=row[1],
+            #     fetalHealth=row[2],
+            #     parameters=row[4],
+            #     idMedical=row[3],
+            #     idMo=row[6],
+            #     image1=row[7],
+            #     image2=row[8]
+            # )
+            # model.id = row[0]
+            # results_list.append(model)
 
         return results_list
 
@@ -150,17 +178,20 @@ class Medical(User):
 
 
 class Results:
-    def __init__(self,patientName,fetalHealth,parameters,idMedical):
+    def __init__(self,patientName,fetalHealth,parameters,idMedical,image1,image2,idMo):
         self.id = -1
         self.patientName = patientName
         self.fetalHealth = fetalHealth
         self.parameters = parameters
         self.idMedical = idMedical
+        self.image1 = image1
+        self.image2 - image2
+        self.idMo = idMo
 
 
     def storeResult(self):
         while True:
-            self.id = postResults(self.idMedical,self.patientName,self.fetalHealth,self.parameters)
+            self.id = postResults(self.idMedical,self.patientName,self.fetalHealth,self.parameters,self.idMo,self.image1,self.image2)
             if self.id != -1:
                 break
 
@@ -280,7 +311,7 @@ def getResults(pName,idM):
 
 
 # def postData(mName,pName,fH,parameters): #parameters is json data
-def postResults(idM,pName,fH,parameters):
+def postResults(idP,pName,fH,parameters,idMo,image1,image2):
      
     conn = connect()
 
@@ -329,11 +360,11 @@ def postResults(idM,pName,fH,parameters):
     # print("id of doctor -> ",idM)
 
     query = """
-        INSERT INTO results (Patient_Name, Fetal_Health, medical_supervisor, parameters) 
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO results (Patient_Name, Fetal_Health, medical_supervisor, parameters, model_id, image1, image2) 
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
     """
 
-    data = (pName,fH,idM,json.dumps(parameters))
+    data = (pName,fH,idP,json.dumps(parameters),idMo, image1, image2)
     cursor.execute(query, data)
     conn.commit()
 
@@ -467,22 +498,30 @@ def updateUserInfo(userObj, updates: dict):
         if field != "description":
             if hasattr(userObj, field):
                 setattr(userObj, field, value)
-        else:
-            userObj.description = value
-            del updates[field]
 
-    # Prepare the SQL query
-    set_clause = ", ".join(f"{field} = %s" for field in updates.keys())
-    values = list(updates.values())
-    values.append(userObj.id)  # For WHERE clause
+    # Handle description outside the loop
+    if "description" in updates:
+        userObj.description = updates["description"]
+        del updates["description"]
 
-
-    query = f"UPDATE users SET {set_clause} WHERE id = %s"
 
     conn = connect()
     cursor = conn.cursor()
-    cursor.execute(query, values)
-    conn.commit()
+
+
+    if updates:  # Only run update if there is something to update
+        set_clause = ", ".join(f"{field} = %s" for field in updates.keys())
+        values = list(updates.values())
+        values.append(userObj.id)  # For WHERE clause
+
+        query = f"UPDATE users SET {set_clause} WHERE id = %s"
+
+        cursor.execute(query, values)
+        conn.commit()
+
+    else:
+        print("No fields to update in users.")
+
 
     # Update the description in the corresponding table
     if userObj.role == "admin":
@@ -533,6 +572,64 @@ def deleteUser(idU):
     print("User deleted successfully\n")
 
 
+def createModel(name,parameters,values,idP):
+    conn = connect()
+    cursor = conn.cursor()
+
+    query = """
+        INSERT INTO model (name, parameters, valuesN, maker) 
+        VALUES (%s, %s, %s, %s)
+    """
+
+    data = (name, parameters, values, idP)
+    cursor.execute(query, data)
+    conn.commit()
+
+    id = cursor.lastrowid
+
+    cursor.close()
+    conn.close()
+
+    print("Model inserted successfully!")
+
+    return id
+
+
+def getModels(idM,name):
+     
+    conn = connect()
+
+    # if not conn :
+    #     return 'NO_CONN'    #Cannot establise connection to DB
+    
+    cursor = conn.cursor()
+
+    # query = 'SELECT id FROM medical_personnel WHERE user_id = %s'
+    # cursor.execute(query, (idM,))
+    # result = cursor.fetchone()
+
+    # if result is None:
+    #     return -1
+
+    # idM = result[0]
+
+    if name.strip(): 
+        query = 'SELECT * FROM model WHERE Patient_Name = %s AND id = %s'
+        cursor.execute(query, (name, idM,))
+    else:  
+        query = 'SELECT * FROM model WHERE id = %s'
+        cursor.execute(query, (idM,))
+
+    result = cursor.fetchall()
+    cursor.close()
+    conn.close()
+
+    if not result:
+        return -1
+
+    return result
+
+
 # parameters = {
 #     "parameter1": 100,
 #     "parameter2": 100,
@@ -545,15 +642,17 @@ def deleteUser(idU):
 
 # print(getResults("",2))
 
-# Admin = login('ilias_stath','123456789')
-# users_list = Admin.getUsers("Konstantinos Papathanasiou",-1)
+# Admin = login("ilias_stath","123456789")
+# users_list = Admin.getUsers("agasdgd",-1)
 # for user in users_list:
     
 #     # Update user info using admin
 #     Admin.updateUser(user, {
-#         "username": "konnos_pap",
+#         "email": "ktist@",
+#         "description": "A9",
 #     })
 
+# Admin.delete(5)
 
 
 #-----Do the hash for every knew user
@@ -562,15 +661,15 @@ def deleteUser(idU):
 # conn = connect()
 # cursor = conn.cursor()
 
-# plain_password = "123456789"
+# plain_password = "asd1sdd"
 # hashed_password = bcrypt.hashpw(plain_password.encode('utf-8'), bcrypt.gensalt())
 
 # query = """
-#     INSERT INTO users (fullName, username, password, role, telephone, email, adress) 
+#     INSERT INTO users (fullName, username, password, role, telephone, email, address) 
 #     VALUES (%s, %s, %s, %s, %s, %s, %s)
 # """
 
-# data = ("Ilias Stathakos", "ilias_stath", hashed_password.decode('utf-8'), "admin", "+306999999", "ece002017@uowm.gr", "kozani")
+# data = ("agasdgd", "gasdqwef", hashed_password.decode('utf-8'), "admin", "+306916644999", "ecew@uowm.gr", "koza13ni")
 # cursor.execute(query, data)
 # conn.commit()
 
