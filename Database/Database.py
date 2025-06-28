@@ -706,9 +706,9 @@ def login(username,password):
     email = result[6]
     adress = result[7]
 
-    print(result)
     
     if bcrypt.checkpw(password.encode('utf-8'), passwordDB):
+        print(result)
         if role == "admin":
             query = 'SELECT id,clearance FROM administrators WHERE user_id = %s'
         else:
@@ -871,15 +871,45 @@ def getUsers(fullName,id):
     return result
 
 
+def is_bcrypt_hash(s):
+    """
+    Heuristically checks if a string appears to be a bcrypt hash.
+    This is NOT a foolproof method and should be used with caution.
+    """
+    if not isinstance(s, str):
+        return False
+    
+    # Bcrypt hashes are usually 60 characters long (for a cost of 12)
+    # and start with $2a$, $2b$, or $2y$ followed by the cost factor.
+    # A common length for a bcrypt hash is 60 characters.
+    if len(s) == 60 and s.startswith(("$2a$", "$2b$", "$2y$")):
+        parts = s.split('$')
+        if len(parts) == 4 and parts[0] == '' and parts[1] in ('2a', '2b', '2y'):
+            try:
+                # Check if the cost factor is a valid integer
+                cost = int(parts[2])
+                if 4 <= cost <= 31: # Bcrypt cost factors typically range from 4 to 31
+                    return True
+            except ValueError:
+                pass
+    return False
+
+
 def updateUserInfo(userObj, updates: dict):
 
     print(updates)
 
     for field, value in updates.items():
         if field == "password":
-            hashed_password = bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt())
-            value = hashed_password.decode('utf-8')
-            updates[field] = value 
+            if not is_bcrypt_hash(value): # Only hash if it's not already hashed
+                hashed_password = bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt())
+                updates[field] = hashed_password.decode('utf-8')
+            else:
+                # If it's already a bcrypt hash, assume it's valid and use it as is.
+                # In a real-world scenario, you might want to log this or have a policy
+                # that updates always provide plaintext for hashing.
+                print("HASHED")
+                pass # The value is already hashed, no need to re-hash.
 
         if field != "description":
             if hasattr(userObj, field):
