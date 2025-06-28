@@ -1,3 +1,7 @@
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+# (τα υπόλοιπα imports παραμένουν)
 import os
 import json
 import datetime
@@ -67,6 +71,7 @@ def select_and_predict():
 
     choice = input(f"Επιλέξτε μοντέλο (1-{len(registry)}): ")
     
+
     if choice not in model_map:
         print("Μη έγκυρη επιλογή.")
         return
@@ -97,24 +102,92 @@ def select_and_predict():
     print(f"\nΧρησιμοποιώντας το μοντέλο ID: {selected_model_id}")
     print(f"Η πρόβλεψη του μοντέλου είναι: {predicted_text} (Κλάση: {predicted_class})")
 
+def plot_class_distribution():
+    """Plot: Κατανομή Κλάσεων"""
+    print("\nΔημιουργία γραφήματος: Κατανομή Κλάσεων...")
+    data = pd.read_csv(DATASET_CSV)
+    plt.figure(figsize=(8, 6))
+    sns.countplot(x='fetal_health', data=data)
+    plt.title('Κατανομή Κλάσεων Υγείας Εμβρύου')
+    plt.xlabel('Κατηγορία Υγείας (1: Normal, 2: Suspect, 3: Pathological)')
+    plt.ylabel('Αριθμός Περιστατικών')
+    plt.show()
+
+def plot_correlation_heatmap():
+    """Plot: Πίνακας Συσχέτισης"""
+    print("\nΔημιουργία γραφήματος: Πίνακας Συσχέτισης...")
+    data = pd.read_csv(DATASET_CSV)
+    plt.figure(figsize=(20, 16))
+    sns.heatmap(data.corr(), annot=False, cmap='coolwarm') # annot=False για ταχύτητα/καθαρότητα
+    plt.title('Πίνακας Συσχέτισης Παραμέτρων')
+    plt.show()
+
+def plot_feature_distribution():
+    """Plot: Κατανομή Παραμέτρου ανά Κλάση (Box Plot)"""
+    data = pd.read_csv(DATASET_CSV)
+    feature_name = input("Δώστε το ακριβές όνομα της παραμέτρου που θέλετε να αναλύσετε (π.χ. 'abnormal_short_term_variability'): ")
+    if feature_name not in data.columns:
+        print("Σφάλμα: Αυτό το όνομα παραμέτρου δεν υπάρχει.")
+        return
+    
+    print(f"\nΔημιουργία γραφήματος: Κατανομή της '{feature_name}'...")
+    plt.figure(figsize=(10, 7))
+    sns.boxplot(x='fetal_health', y=feature_name, data=data)
+    plt.title(f'Κατανομή της παραμέτρου "{feature_name}" ανά Κλάση')
+    plt.xlabel('Κατηγορία Υγείας')
+    plt.ylabel(f'Τιμή της {feature_name}')
+    plt.show()
+
+def eda_submenu():
+    """Υπο-μενού για τις οπτικοποιήσεις ανάλυσης δεδομένων."""
+    if not os.path.exists(DATASET_CSV):
+        print(f"Σφάλμα: Το αρχείο dataset '{DATASET_CSV}' δεν βρέθηκε.")
+        return
+        
+    while True:
+        print("\n--- Μενού Ανάλυσης Δεδομένων (EDA) ---")
+        print("1. Γράφημα Κατανομής Κλάσεων")
+        print("2. Πίνακας Συσχέτισης (Heatmap)")
+        print("3. Γράφημα Κατανομής Παραμέτρου (Box Plot)")
+        print("4. Επιστροφή στο Κύριο Μενού")
+        
+        choice = input("Επιλέξτε γράφημα (1-4): ")
+        if choice == '1':
+            plot_class_distribution()
+        elif choice == '2':
+            plot_correlation_heatmap()
+        elif choice == '3':
+            plot_feature_distribution()
+        elif choice == '4':
+            break
+        else:
+            print("Μη έγκυρη επιλογή.")
+            
+# ====================================================================
+# === ΤΕΛΟΣ ΝΕΩΝ ΣΥΝΑΡΤΗΣΕΩΝ ===
+# ====================================================================
+
 def main_menu():
-    """Κύριο μενού της εφαρμογής."""
-    setup_environment() # Δημιουργία φακέλου αν δεν υπάρχει
+    """Κύριο μενού της εφαρμογής (ΕΝΗΜΕΡΩΜΕΝΟ)."""
+    setup_environment() 
     while True:
         print("\n" + "="*40)
-        print("   Κύριο Μενού - Fetal Health (v2)")
+        print("   Κύριο Μενού - Fetal Health (v3 with Plots)")
         print("="*40)
         print("1. Πρόβλεψη (με επιλογή μοντέλου)")
         print("2. Εκπαίδευση νέου μοντέλου")
-        print("3. Έξοδος")
+        print("3. Ανάλυση Δεδομένων & Οπτικοποιήσεις (EDA)") # <-- ΝΕΑ ΕΠΙΛΟΓΗ
+        print("4. Έξοδος") # <-- ΕΓΙΝΕ 4
         
-        choice = input("Παρακαλώ επιλέξτε (1-3): ")
+        choice = input("Παρακαλώ επιλέξτε (1-4): ")
 
         if choice == '1':
             select_and_predict()
         elif choice == '2':
             train_and_save_new_model()
         elif choice == '3':
+            eda_submenu() # <-- ΚΑΛΕΙ ΤΟ ΝΕΟ ΥΠΟ-ΜΕΝΟΥ
+        elif choice == '4':
             print("Έξοδος από το πρόγραμμα.")
             break
         else:

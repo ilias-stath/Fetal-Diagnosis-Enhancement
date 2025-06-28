@@ -1,10 +1,14 @@
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
+# (τα υπόλοιπα imports παραμένουν)
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score
-import joblib # Βιβλιοθήκη για αποθήκευση/φόρτωση μοντέλων
-import uuid # Για τη δημιουργία μοναδικού ID
+import joblib
+import uuid
 
 class FetalHealthModel:
     """
@@ -122,3 +126,5 @@ class FetalHealthModel:
         self.model_object = model_pack['model_object']
         self.scaler = model_pack['scaler']
         print(f"Το μοντέλο '{self.model_name}' (ID: {self.model_id}) φορτώθηκε από το: {filepath}")
+        
+    
