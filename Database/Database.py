@@ -1042,7 +1042,7 @@ def get_models_from_db(model_id=None, name=None, maker_id=None):
     params = []
 
     if model_id is not None and model_id != -1:
-        query += " AND id = %s"
+        query += " AND (id = %s OR id = 1)" 
         params.append(model_id)
     if name is not None and name.strip():
         query += " AND name LIKE %s"
@@ -1050,6 +1050,8 @@ def get_models_from_db(model_id=None, name=None, maker_id=None):
     if maker_id is not None and maker_id != -1:
         query += " AND maker = %s"
         params.append(maker_id)
+    if model_id is None:
+        query += " AND id = 1"
 
     cursor.execute(query, tuple(params))
     result = cursor.fetchall()
