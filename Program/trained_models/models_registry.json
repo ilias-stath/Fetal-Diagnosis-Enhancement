@@ -1,12 +1,10 @@
 {
-    "c8483b56-cbf9-47ee-949e-e036f587f210": {
-        "filename": "model_c8483b56-cbf9-47ee-949e-e036f587f210.pkl",
-        "name": "Fetal Health Random Forest Classifier",
-        "trained_on": "2025-06-14 15:49:27"
+    "48ce91fe-1d3d-4e7f-af46-d079f47d064a": {
+        "filename": "model_48ce91fe-1d3d-4e7f-af46-d079f47d064a.pkl",
+        "trained_on": "2025-06-28 13:38:16"
     },
-    "4e5fa357-6197-4aaf-bfe6-e719c622aee3": {
-        "filename": "model_4e5fa357-6197-4aaf-bfe6-e719c622aee3.pkl",
-        "name": "Fetal Health Random Forest Classifier",
-        "trained_on": "2025-06-27 17:15:40"
+    "e13666de-12e5-4437-aad4-9c7b7000ff72": {
+        "filename": "model_e13666de-12e5-4437-aad4-9c7b7000ff72.pkl",
+        "trained_on": "2025-06-28 13:39:26"
     }
 }

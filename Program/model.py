@@ -9,6 +9,10 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score
 import joblib
 import uuid
+import os  # Προσθήκη του os για διαχείριση φακέλων
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
 
 class FetalHealthModel:
     """
@@ -29,7 +33,7 @@ class FetalHealthModel:
         self.model_object = None # Το ίδιο το εκπαιδευμένο μοντέλο
         self.scaler = None # Ο scaler που χρησιμοποιήθηκε για την κανονικοποίηση
 
-    def train_new_model(self, csv_path: str):
+    def train_new_model(self, csv_path: str, models_dir: str):
         """
         Μέθοδος 2: Δημιουργία και εκπαίδευση ενός νέου μοντέλου.
         Διαβάζει δεδομένα από ένα CSV, τα επεξεργάζεται, εκπαιδεύει το μοντέλο
@@ -64,9 +68,45 @@ class FetalHealthModel:
         self.model_object.fit(X_train_scaled, y_train)
         
         # 6. Δημιουργία ID και αξιολόγηση
-        self.model_id = str(uuid.uuid4())
         predictions = self.model_object.predict(X_test_scaled)
         accuracy = accuracy_score(y_test, predictions)
+        self.model_id = str(uuid.uuid4())
+# Δημιουργία ενός φακέλου ειδικά για τα plots αυτού του μοντέλου
+        model_plots_dir = os.path.join(models_dir, self.model_id)
+        if not os.path.exists(model_plots_dir):
+            os.makedirs(model_plots_dir)
+        
+        print(f"\nΑποθήκευση οπτικοποιήσεων αξιολόγησης στον φάκελο: {model_plots_dir}")
+        
+        # 7.1 Plot: Πίνακας Σύγχυσης (Confusion Matrix)
+        cm = confusion_matrix(y_test, predictions)
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                    xticklabels=['Normal', 'Suspect', 'Pathological'], 
+                    yticklabels=['Normal', 'Suspect', 'Pathological'])
+        plt.title('Πίνακας Σύγχυσης (Confusion Matrix)')
+        plt.ylabel('Πραγματική Κλάση (Actual)')
+        plt.xlabel('Προβλεπόμενη Κλάση (Predicted)')
+        # Αλλάζουμε το plt.show() σε plt.savefig()
+        confusion_matrix_path = os.path.join(model_plots_dir, 'confusion_matrix.png')
+        plt.savefig(confusion_matrix_path)
+        plt.close() # Κλείνουμε τη φιγούρα για να απελευθερώσουμε μνήμη
+
+        # 7.2 Plot: Σημαντικότητα Παραμέτρων (Feature Importance)
+        importances = self.model_object.feature_importances_
+        feature_names = self.parameters
+        feature_importance_df = pd.DataFrame({'feature': feature_names, 'importance': importances})
+        feature_importance_df = feature_importance_df.sort_values(by='importance', ascending=False)
+        plt.figure(figsize=(12, 10))
+        sns.barplot(x='importance', y='feature', data=feature_importance_df)
+        plt.title('Σημαντικότητα Παραμέτρων (Feature Importance)')
+        plt.xlabel('Βαθμός Σημαντικότητας')
+        plt.ylabel('Παράμετρος')
+        plt.tight_layout()
+        # Αλλάζουμε το plt.show() σε plt.savefig()
+        feature_importance_path = os.path.join(model_plots_dir, 'feature_importance.png')
+        plt.savefig(feature_importance_path)
+        plt.close() # Κλείνουμε τη φιγούρα
         
         print("--- Η εκπαίδευση ολοκληρώθηκε! ---")
         print(f"Model ID: {self.model_id}")

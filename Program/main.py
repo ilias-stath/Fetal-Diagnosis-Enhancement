@@ -6,17 +6,47 @@ import os
 import json
 import datetime
 from model import FetalHealthModel
-import Database as DB
+import shutil # Νέο import για διαγραφή φακέλων
 
 # Σταθερές για εύκολη διαχείριση
-MODELS_DIR = "trained_models"  # Ένας φάκελος για να αποθηκεύουμε τα μοντέλα
+MODELS_DIR = "trained_models"
+EDA_PLOTS_DIR = "eda_plots" # Νέος φάκελος για τα EDA plots
 REGISTRY_FILE = os.path.join(MODELS_DIR, "models_registry.json")
 DATASET_CSV = 'fetal_health.csv'
 
 def setup_environment():
-    """Διασφαλίζει ότι ο φάκελος για τα μοντέλα υπάρχει."""
+    """Διασφαλίζει ότι οι απαραίτητοι φάκελοι υπάρχουν."""
     if not os.path.exists(MODELS_DIR):
         os.makedirs(MODELS_DIR)
+    if not os.path.exists(EDA_PLOTS_DIR):
+        os.makedirs(EDA_PLOTS_DIR)
+
+def generate_eda_plots():
+    """Δημιουργεί και αποθηκεύει όλες τις οπτικοποιήσεις EDA."""
+    print("\nΔημιουργία και αποθήκευση EDA plots...")
+    if not os.path.exists(DATASET_CSV):
+        print(f"Σφάλμα: Το αρχείο dataset '{DATASET_CSV}' δεν βρέθηκε.")
+        return
+
+    data = pd.read_csv(DATASET_CSV)
+
+    # 1. Κατανομή Κλάσεων
+    plt.figure(figsize=(8, 6))
+    sns.countplot(x='fetal_health', data=data)
+    plt.title('Κατανομή Κλάσεων Υγείας Εμβρύου')
+    plt.xlabel('Κατηγορία Υγείας (1: Normal, 2: Suspect, 3: Pathological)')
+    plt.ylabel('Αριθμός Περιστατικών')
+    plt.savefig(os.path.join(EDA_PLOTS_DIR, 'class_distribution.png'))
+    plt.close()
+
+    # 2. Πίνακας Συσχέτισης
+    plt.figure(figsize=(20, 16))
+    sns.heatmap(data.corr(), cmap='coolwarm')
+    plt.title('Πίνακας Συσχέτισης Παραμέτρων')
+    plt.savefig(os.path.join(EDA_PLOTS_DIR, 'correlation_heatmap.png'))
+    plt.close()
+
+    print(f"Τα EDA plots αποθηκεύτηκαν στον φάκελο: {EDA_PLOTS_DIR}")
 
 def load_registry():
     """Φορτώνει τον κατάλογο των μοντέλων. Αν δεν υπάρχει, επιστρέφει ένα άδειο λεξικό."""
@@ -33,59 +63,47 @@ def save_registry(registry):
 def train_and_save_new_model():
     """Εκπαιδεύει ένα νέο μοντέλο και το αποθηκεύει με μοναδικό όνομα."""
     print("\n--- Εκπαίδευση Νέου Μοντέλου ---")
-    if not os.path.exists(DATASET_CSV):
-        print(f"Σφάλμα: Το αρχείο dataset '{DATASET_CSV}' δεν βρέθηκε.")
-        return
+    if not os.path.exists(REGISTRY_FILE) or not load_registry():
+        generate_eda_plots()
 
     model_trainer = FetalHealthModel()
-    model_trainer.train_new_model(DATASET_CSV)
+    # Περνάμε το όνομα του φακέλου στη μέθοδο
+    model_trainer.train_new_model(DATASET_CSV, MODELS_DIR) 
     
-    # Δημιουργία μοναδικού ονόματος αρχείου βάσει του ID του μοντέλου
     model_filename = f"model_{model_trainer.model_id}.pkl"
     model_filepath = os.path.join(MODELS_DIR, model_filename)
     model_trainer.save_model(model_filepath)
     
-    # Ενημέρωση του καταλόγου
     registry = load_registry()
     registry[model_trainer.model_id] = {
         "filename": model_filename,
-        "name": model_trainer.model_name,
         "trained_on": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     save_registry(registry)
     
     print(f"\nΤο νέο μοντέλο με ID: {model_trainer.model_id} εκπαιδεύτηκε και αποθηκεύτηκε.")
+    print(f"Τα plots αξιολόγησης βρίσκονται στον φάκελο: {os.path.join(MODELS_DIR, model_trainer.model_id)}")
 
-# def select_and_predict(pName, new_patient_data,idM):
 def select_and_predict():
-    """Επιτρέπει στον χρήστη να επιλέξει ένα μοντέλο και να κάνει πρόβλεψη."""
     print("\n--- Πρόβλεψη με Επιλογή Μοντέλου ---")
     registry = load_registry()
     if not registry:
-        print("Σφάλμα: Δεν υπάρχουν εκπαιδευμένα μοντέλα. Παρακαλώ εκπαιδεύστε ένα πρώτα (Επιλογή 2).")
+        print("Σφάλμα: Δεν υπάρχουν εκπαιδευμένα μοντέλα.")
         return
-
     print("Διαθέσιμα Μοντέλα:")
     model_map = {}
     for i, (model_id, details) in enumerate(registry.items(), 1):
         print(f"{i}. ID: {model_id} (Εκπαιδεύτηκε: {details['trained_on']})")
         model_map[str(i)] = model_id
-
     choice = input(f"Επιλέξτε μοντέλο (1-{len(registry)}): ")
-    
-
     if choice not in model_map:
         print("Μη έγκυρη επιλογή.")
         return
-        
     selected_model_id = model_map[choice]
     selected_model_filename = registry[selected_model_id]['filename']
     model_filepath = os.path.join(MODELS_DIR, selected_model_filename)
-
     model_predictor = FetalHealthModel()
     model_predictor.load_model(model_filepath)
-
-    # Δεδομένα για το pilot/demo περιστατικό
     new_patient_data = {
         'baseline value': 134.0, 'accelerations': 0.0, 'fetal_movement': 0.0,
         'uterine_contractions': 0.006, 'light_decelerations': 0.003, 'severe_decelerations': 0.0,
@@ -96,91 +114,71 @@ def select_and_predict():
         'histogram_number_of_zeroes': 0.0, 'histogram_mode': 137.0, 'histogram_mean': 136.0,
         'histogram_median': 138.0, 'histogram_variance': 4.0, 'histogram_tendency': 1.0
     }
-    
     predicted_class = model_predictor.predict_health_status(new_patient_data)
-    health_map = {1: "Normal", 2: "Suspect", 3: "Pathological"}
+    health_map = {1: "Κανονική (Normal)", 2: "Ύποπτη (Suspect)", 3: "Παθολογική (Pathological)"}
     predicted_text = health_map.get(predicted_class, "Άγνωστη Κατηγορία")
-
     print(f"\nΧρησιμοποιώντας το μοντέλο ID: {selected_model_id}")
     print(f"Η πρόβλεψη του μοντέλου είναι: {predicted_text} (Κλάση: {predicted_class})")
 
-    # result = DB.Results(
-    #             patientName=pName,
-    #             fetalHealth=predicted_text,
-    #             parameters=new_patient_data,
-    #             idMedical=idM,
-    #             image1=image1, # Create png from plots
-    #             image2=image2,
-    #             idMo=selected_model_id # Use the id of the database
-    #         )
-    
-    # result.storeResult()
-    
 
-
-def plot_class_distribution():
-    """Plot: Κατανομή Κλάσεων"""
-    print("\nΔημιουργία γραφήματος: Κατανομή Κλάσεων...")
-    data = pd.read_csv(DATASET_CSV)
-    plt.figure(figsize=(8, 6))
-    sns.countplot(x='fetal_health', data=data)
-    plt.title('Κατανομή Κλάσεων Υγείας Εμβρύου')
-    plt.xlabel('Κατηγορία Υγείας (1: Normal, 2: Suspect, 3: Pathological)')
-    plt.ylabel('Αριθμός Περιστατικών')
-    plt.show()
-
-def plot_correlation_heatmap():
-    """Plot: Πίνακας Συσχέτισης"""
-    print("\nΔημιουργία γραφήματος: Πίνακας Συσχέτισης...")
-    data = pd.read_csv(DATASET_CSV)
-    plt.figure(figsize=(20, 16))
-    sns.heatmap(data.corr(), annot=False, cmap='coolwarm') # annot=False για ταχύτητα/καθαρότητα
-    plt.title('Πίνακας Συσχέτισης Παραμέτρων')
-    plt.show()
-
-def plot_feature_distribution():
-    """Plot: Κατανομή Παραμέτρου ανά Κλάση (Box Plot)"""
-    data = pd.read_csv(DATASET_CSV)
-    feature_name = input("Δώστε το ακριβές όνομα της παραμέτρου που θέλετε να αναλύσετε (π.χ. 'abnormal_short_term_variability'): ")
-    if feature_name not in data.columns:
-        print("Σφάλμα: Αυτό το όνομα παραμέτρου δεν υπάρχει.")
+def delete_model():
+    """Επιτρέπει στον χρήστη να επιλέξει και να διαγράψει ένα εκπαιδευμένο μοντέλο."""
+    print("\n--- Διαγραφή Μοντέλου ---")
+    registry = load_registry()
+    if not registry:
+        print("Δεν υπάρχουν εκπαιδευμένα μοντέλα για διαγραφή.")
         return
-    
-    print(f"\nΔημιουργία γραφήματος: Κατανομή της '{feature_name}'...")
-    plt.figure(figsize=(10, 7))
-    sns.boxplot(x='fetal_health', y=feature_name, data=data)
-    plt.title(f'Κατανομή της παραμέτρου "{feature_name}" ανά Κλάση')
-    plt.xlabel('Κατηγορία Υγείας')
-    plt.ylabel(f'Τιμή της {feature_name}')
-    plt.show()
 
-def eda_submenu():
-    """Υπο-μενού για τις οπτικοποιήσεις ανάλυσης δεδομένων."""
-    if not os.path.exists(DATASET_CSV):
-        print(f"Σφάλμα: Το αρχείο dataset '{DATASET_CSV}' δεν βρέθηκε.")
+    print("Επιλέξτε το μοντέλο που θέλετε να διαγράψετε:")
+    model_map = {}
+    for i, (model_id, details) in enumerate(registry.items(), 1):
+        print(f"{i}. ID: {model_id} (Εκπαιδεύτηκε: {details['trained_on']})")
+        model_map[str(i)] = model_id
+
+    choice = input(f"Επιλέξτε μοντέλο προς διαγραφή (1-{len(registry)}) ή 'q' για ακύρωση: ")
+    
+    if choice.lower() == 'q':
+        print("Η διαγραφή ακυρώθηκε.")
         return
         
-    while True:
-        print("\n--- Μενού Ανάλυσης Δεδομένων (EDA) ---")
-        print("1. Γράφημα Κατανομής Κλάσεων")
-        print("2. Πίνακας Συσχέτισης (Heatmap)")
-        print("3. Γράφημα Κατανομής Παραμέτρου (Box Plot)")
-        print("4. Επιστροφή στο Κύριο Μενού")
-        
-        choice = input("Επιλέξτε γράφημα (1-4): ")
-        if choice == '1':
-            plot_class_distribution()
-        elif choice == '2':
-            plot_correlation_heatmap()
-        elif choice == '3':
-            plot_feature_distribution()
-        elif choice == '4':
-            break
-        else:
-            print("Μη έγκυρη επιλογή.")
-            
+    if choice not in model_map:
+        print("Μη έγκυρη επιλογή.")
+        return
+
+    # Επιβεβαίωση από τον χρήστη
+    confirm = input(f"Είστε σίγουροι ότι θέλετε να διαγράψετε το μοντέλο {choice}; Αυτή η ενέργεια δεν αναιρείται. (y/n): ")
+    if confirm.lower() != 'y':
+        print("Η διαγραφή ακυρώθηκε.")
+        return
+
+    # Λήψη των πληροφοριών του μοντέλου
+    selected_model_id = model_map[choice]
+    model_details = registry[selected_model_id]
+    
+    try:
+        # 1. Διαγραφή του αρχείου .pkl
+        pkl_path = os.path.join(MODELS_DIR, model_details['filename'])
+        if os.path.exists(pkl_path):
+            os.remove(pkl_path)
+            print(f"Διαγράφηκε το αρχείο: {pkl_path}")
+
+        # 2. Διαγραφή του φακέλου με τα plots
+        plots_dir = os.path.join(MODELS_DIR, selected_model_id)
+        if os.path.exists(plots_dir):
+            shutil.rmtree(plots_dir)
+            print(f"Διαγράφηκε ο φάκελος: {plots_dir}")
+
+        # 3. Αφαίρεση της εγγραφής από τον κατάλογο
+        del registry[selected_model_id]
+        save_registry(registry)
+        print(f"Η εγγραφή για το μοντέλο {selected_model_id} αφαιρέθηκε από τον κατάλογο.")
+        print("\nΗ διαγραφή ολοκληρώθηκε με επιτυχία.")
+
+    except Exception as e:
+        print(f"Προέκυψε σφάλμα κατά τη διαγραφή: {e}")
+
 # ====================================================================
-# === ΤΕΛΟΣ ΝΕΩΝ ΣΥΝΑΡΤΗΣΕΩΝ ===
+# === ΤΕΛΟΣ ΝΕΑΣ ΣΥΝΑΡΤΗΣΗΣ ===
 # ====================================================================
 
 def main_menu():
@@ -188,12 +186,12 @@ def main_menu():
     setup_environment() 
     while True:
         print("\n" + "="*40)
-        print("   Κύριο Μενού - Fetal Health (v3 with Plots)")
+        print("   Κύριο Μενού - Fetal Health (v5)")
         print("="*40)
         print("1. Πρόβλεψη (με επιλογή μοντέλου)")
         print("2. Εκπαίδευση νέου μοντέλου")
-        print("3. Ανάλυση Δεδομένων & Οπτικοποιήσεις (EDA)") # <-- ΝΕΑ ΕΠΙΛΟΓΗ
-        print("4. Έξοδος") # <-- ΕΓΙΝΕ 4
+        print("3. Διαγραφή υπάρχοντος μοντέλου") # <-- ΝΕΑ ΕΠΙΛΟΓΗ
+        print("4. Έξοδος")
         
         choice = input("Παρακαλώ επιλέξτε (1-4): ")
 
@@ -202,7 +200,7 @@ def main_menu():
         elif choice == '2':
             train_and_save_new_model()
         elif choice == '3':
-            eda_submenu() # <-- ΚΑΛΕΙ ΤΟ ΝΕΟ ΥΠΟ-ΜΕΝΟΥ
+            delete_model() # <-- ΚΑΛΕΙ ΤΗ ΝΕΑ ΣΥΝΑΡΤΗΣΗ
         elif choice == '4':
             print("Έξοδος από το πρόγραμμα.")
             break
