@@ -56,7 +56,8 @@ def train_and_save_new_model():
     
     print(f"\nΤο νέο μοντέλο με ID: {model_trainer.model_id} εκπαιδεύτηκε και αποθηκεύτηκε.")
 
-def select_and_predict(pName, new_patient_data,idM):
+# def select_and_predict(pName, new_patient_data,idM):
+def select_and_predict():
     """Επιτρέπει στον χρήστη να επιλέξει ένα μοντέλο και να κάνει πρόβλεψη."""
     print("\n--- Πρόβλεψη με Επιλογή Μοντέλου ---")
     registry = load_registry()
@@ -103,17 +104,17 @@ def select_and_predict(pName, new_patient_data,idM):
     print(f"\nΧρησιμοποιώντας το μοντέλο ID: {selected_model_id}")
     print(f"Η πρόβλεψη του μοντέλου είναι: {predicted_text} (Κλάση: {predicted_class})")
 
-    result = DB.Results(
-                patientName=pName,
-                fetalHealth=predicted_text,
-                parameters=new_patient_data,
-                idMedical=idM,
-                image1=image1, # Create png from plots
-                image2=image2,
-                idMo=selected_model_id # Use the id of the database
-            )
+    # result = DB.Results(
+    #             patientName=pName,
+    #             fetalHealth=predicted_text,
+    #             parameters=new_patient_data,
+    #             idMedical=idM,
+    #             image1=image1, # Create png from plots
+    #             image2=image2,
+    #             idMo=selected_model_id # Use the id of the database
+    #         )
     
-    result.storeResult()
+    # result.storeResult()
     
 
 
