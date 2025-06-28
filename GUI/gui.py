@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
-import stathakis as akis
+import Database as DB
 
 class GUI:
     def __init__(self, root):
@@ -13,8 +13,6 @@ class GUI:
         self.current_page = "login"
         self.csv_path = None
 
-        self.ADMIN_CREDENTIALS = ("admin", "admin")
-        self.USER_CREDENTIALS = ("user", "user")
 
         self.setup_style()
 
@@ -71,7 +69,7 @@ class GUI:
             user = "george_ktist"
             pw = "123456789"
 
-        self.User = akis.login(user, pw)
+        self.User = DB.login(user, pw)
         if type(self.User) != str:
             if self.User.role == "admin":
                 self.show_admin_page()
@@ -85,7 +83,7 @@ class GUI:
         center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
         center_frame.place(relx=0.5, rely=0.5, anchor='center')
 
-        tk.Label(center_frame, text="Welcome, Admin!", font=("Arial", 36, "bold"),
+        tk.Label(center_frame, text="Welcome, "+self.User.fullName, font=("Arial", 36, "bold"),
                  bg="white", fg=self.bg_color, padx=30, pady=20, bd=2, relief="groove").pack(pady=(0, 30))
         
 
@@ -98,7 +96,7 @@ class GUI:
         center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
         center_frame.place(relx=0.5, rely=0.5, anchor='center')
 
-        tk.Label(center_frame, text="Welcome, User!", font=("Arial", 36, "bold"),
+        tk.Label(center_frame, text="Welcome, "+self.User.fullName, font=("Arial", 36, "bold"),
                  bg="white", fg=self.bg_color, padx=30, pady=20, bd=2, relief="groove").pack(pady=(0, 30))
 
         ttk.Button(center_frame, text="Insert values for estimation", width=40, command=self.insert_values).pack(pady=10)
@@ -110,7 +108,8 @@ class GUI:
         self.show_csv_screen(
             title="Insert CSV for Estimation",
             run_command=self.run_model,
-            back_command=self.show_user_page
+            back_command=self.show_user_page,
+            training=False
         )
 
     def train_model_screen(self):
@@ -120,7 +119,7 @@ class GUI:
             back_command=self.show_user_page
         )
 
-    def show_csv_screen(self, title, run_command, back_command):
+    def show_csv_screen(self, title, run_command, back_command,training=True):
         self.clear_frame()
         self.csv_path = None
 
@@ -130,28 +129,99 @@ class GUI:
         tk.Label(center_frame, text=title, font=("Arial", 30, "bold"),
                  bg="white", fg=self.bg_color, padx=30, pady=20, bd=2, relief="groove").pack(pady=(0, 20))
 
-        ttk.Button(center_frame, text="Browse CSV File", width=30, command=self.browse_csv).pack(pady=10)
+        ttk.Button(center_frame, text="Browse CSV File", width=30, command=lambda:self.browse_csv(training)).pack(pady=10)
 
         self.csv_label = tk.Label(center_frame, text="", bg=self.bg_color, fg="white",
                                   font=("Segoe UI", 12), wraplength=800)
         self.csv_label.pack(pady=(20, 10))
 
-        self.run_model_button = ttk.Button(center_frame, text="Run", width=30, command=run_command)
-        self.run_model_button_is_visible = False
+        if training:
+            self.run_model_button = ttk.Button(center_frame, text="Run", width=30, command=run_command)
+            self.run_model_button_is_visible = False
 
         self.back_button = ttk.Button(center_frame, text="Back", style="Exit.TButton", command=back_command)
         self.back_button.pack(pady=10)
 
         self.center_csv_frame = center_frame  # store reference
 
-    def browse_csv(self):
+    def browse_csv(self,training):
         file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if file_path:
             self.csv_path = file_path
             self.csv_label.config(text=f"Selected File: {file_path}")
-            if not self.run_model_button_is_visible:
-                self.run_model_button.pack(before=self.back_button, pady=10)
-                self.run_model_button_is_visible = True
+            if training:
+                if not self.run_model_button_is_visible:
+                    self.run_model_button.pack(pady=10)
+                    self.run_model_button_is_visible = True
+            else:
+                self.display_model_table()  # Show models when CSV is selected
+
+    def display_model_table(self):
+        # Destroy previous model table if it exists
+        if hasattr(self, 'model_table_container') and self.model_table_container.winfo_exists():
+            self.model_table_container.destroy()
+
+        # Outer container
+        self.model_table_container = tk.Frame(self.center_csv_frame, bg="white")
+        self.model_table_container.pack(padx=20, pady=10, fill="both", expand=True)
+
+        # Canvas with vertical scrollbar
+        canvas = tk.Canvas(self.model_table_container, width=750, height=200, bg="white")
+        scrollbar = ttk.Scrollbar(self.model_table_container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg="white")
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Table headers
+        headers = ["ID", "Model Name", "Author ID", "Actions"]
+        for col, header in enumerate(headers):
+            tk.Label(scrollable_frame, text=header, font=("Segoe UI", 10, "bold"),
+                    bg="#dbeafe", fg="black", borderwidth=1, relief="solid", padx=5, pady=5).grid(row=0, column=col, sticky="nsew")
+
+        # Table rows
+        model_list = self.User.getModels(-1, "")
+
+        for row_idx, model in enumerate(model_list, start=1):
+            fields = [model.id, model.model_name, model.idM]
+            for col_idx, field in enumerate(fields):
+                tk.Label(scrollable_frame, text=str(field), bg="white", fg="black",
+                        borderwidth=1, relief="solid", padx=4, pady=4, anchor="w", justify="left").grid(row=row_idx, column=col_idx, sticky="nsew")
+
+            action_frame = tk.Frame(scrollable_frame, bg="white")
+            action_frame.grid(row=row_idx, column=len(fields), padx=4, pady=4)
+
+            tk.Button(action_frame, text="Delete", width=6,
+                    command=lambda mid=model: self.delete_model(mid)).pack(side="left", padx=2)
+
+            tk.Button(action_frame, text="Run", width=6,
+                    command=lambda mid=model: self.run_model_with_csv(mid)).pack(side="left", padx=2)
+    def delete_model(self, model):
+        confirm = messagebox.askyesno("Delete Model", f"Are you sure you want to delete model ID {model.id}?")
+        if confirm:
+            DB.delete_model_from_db(model.id)
+            print(f"Deleted model with ID {model.id}.")
+            messagebox.showinfo("Model Deleted", f"Model ID {model.id} was successfully deleted.")
+            self.display_model_table()  # Refresh the model table
+
+    def run_model_with_csv(self, model):
+        try:
+            res = model.predict_health_status(self.csv_path, self.User.idP)
+            print(f"Run model ID {model.id} on selected CSV {self.csv_path} result -> {res}.")
+            messagebox.showinfo("Success", "Model prediction was created and saved successfully.")
+            self.show_user_page()  # Redirect to user's main screen
+        except Exception as e:
+            messagebox.showerror("Error", f"An error occurred while running the model: {e}")
 
     def confirm_exit(self):
         answer = messagebox.askyesno("Exit Confirmation", "Do you want to log out?")
@@ -160,9 +230,17 @@ class GUI:
 
     def search_results(self):
         print("Search previous results - placeholder")
+        users_list = self.User.getResults("")
+        for user in users_list:
+            # Update user info using admin
+            fields = [user.id, user.patientName, user.fetalHealth, user.parameters, user.idMo]
+        
 
     def train_model(self):
+
         if self.csv_path:
+            model=DB.FetalHealthModel(-1,"","",self.User.id,"")
+            model.train_new_model(self.csv_path)
             messagebox.showinfo("Training", f"Training model with:\n{self.csv_path}")
         else:
             messagebox.showwarning("No File", "Please select a CSV file first.")
@@ -219,17 +297,101 @@ class GUI:
 
         # Create the appropriate user object
         if values["Role"] == 'admin':
-            x = akis.Admin(values["Full Name"], values["Username"], values["Password"],
+            x = DB.Admin(values["Full Name"], values["Username"], values["Password"],
                         values["Role"], values["Telephone"], values["Email"],
                         values["Address"], values["Description"], -1, -1)
         else:
-            x = akis.Medical(values["Full Name"], values["Username"], values["Password"],
+            x = DB.Medical(values["Full Name"], values["Username"], values["Password"],
                             values["Role"], values["Telephone"], values["Email"],
                             values["Address"], values["Description"], -1, -1)
 
         # Optional: Save or process the user object
         messagebox.showinfo("Success", f"New {values['Role']} user created!")
         self.show_admin_page()
+
+    def search_results(self):
+        self.clear_frame()
+
+        center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        center_frame.place(relx=0.5, rely=0.5, anchor='center')
+        self.center_frame = center_frame  # store it for reuse
+
+        tk.Label(center_frame, text="Search Results", font=("Arial", 28, "bold"),
+                bg="white", fg=self.bg_color, padx=30, pady=10, bd=2, relief="groove").pack(pady=(0, 20))
+
+        search_frame = tk.Frame(center_frame, bg=self.bg_color)
+        search_frame.pack(pady=(0, 10))
+
+        tk.Label(search_frame, text="Search by Patient Name:", bg=self.bg_color,
+                fg="white", font=("Segoe UI", 12)).pack(side="left", padx=(0, 10))
+
+        self.results_search_entry = tk.Entry(search_frame, width=30)
+        self.results_search_entry.pack(side="left", padx=(0, 10))
+
+        ttk.Button(search_frame, text="Search", command=lambda: self.display_results_table(self.results_search_entry.get())).pack(side="left")
+
+        if not hasattr(self, 'results_back_button'):
+            self.results_back_button = ttk.Button(center_frame, text="Back", style="Exit.TButton", command=self.show_admin_page)
+            self.results_back_button.pack(pady=20)
+
+        self.display_results_table("")  # Show all results initially
+
+    def display_results_table(self, filter_text):
+        # Destroy previous table frame if exists
+        if hasattr(self, 'results_table_container') and self.results_table_container.winfo_exists():
+            self.results_table_container.destroy()
+
+        # Create a container with canvas + scrollbar
+        self.results_table_container = tk.Frame(self.center_frame, bg="white")
+        self.results_table_container.pack(padx=20, pady=10, fill="both", expand=True)
+
+        canvas = tk.Canvas(self.results_table_container, width=545, height=400, bg="white")
+        scrollbar = tk.Scrollbar(self.results_table_container, orient="vertical", command=canvas.yview)
+        self.results_table_frame = tk.Frame(canvas, bg="white")
+
+        self.results_table_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=self.results_table_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Table headers
+        headers = ["ID", "Patient Name", "Fetal Health", "Parameters", "ID Mo"]
+        for col, header in enumerate(headers):
+            tk.Label(self.results_table_frame, text=header, font=("Segoe UI", 10, "bold"),
+                    bg="#dbeafe", fg="black", borderwidth=1, relief="solid", padx=5, pady=5).grid(row=0, column=col, sticky="nsew")
+
+        results_list = self.User.getResults("") if not filter_text else self.User.getResults(filter_text)
+
+        for row_idx, result in enumerate(results_list, start=1):
+            fields = [result.id, result.patientName, result.fetalHealth, result.parameters, result.idMo]
+            for col_idx, field in enumerate(fields):
+                if headers[col_idx] == "Parameters":
+                    text = str(field)
+                    tk.Label(self.results_table_frame, text=text, bg="white", fg="black", borderwidth=1,
+                            relief="solid", padx=4, pady=4, anchor="w", justify="left",
+                            wraplength=300, width=40).grid(row=row_idx, column=col_idx, sticky="nsew")
+                else:
+                    tk.Label(self.results_table_frame, text=str(field), bg="white", fg="black", borderwidth=1,
+                            relief="solid", padx=4, pady=4, anchor="w", justify="left").grid(row=row_idx, column=col_idx, sticky="nsew")
+
+            action_frame = tk.Frame(self.results_table_frame, bg="white")
+            action_frame.grid(row=row_idx, column=len(fields), padx=4, pady=4)
+
+
+        # Destroy previous back button if exists
+        if hasattr(self, 'results_back_button') and self.results_back_button.winfo_exists():
+            self.results_back_button.destroy()
+
+        # Recreate Back button
+        self.results_back_button = ttk.Button(self.center_frame, text="Back", style="Exit.TButton", command=self.show_user_page)
+        self.results_back_button.pack(pady=20)
+     
 
 
     def lookup_user_data(self):
@@ -261,28 +423,48 @@ class GUI:
 
     def display_user_table(self, filter_text):
         # Destroy previous table frame if exists
-        if hasattr(self, 'table_frame') and self.table_frame.winfo_exists():
-            self.table_frame.destroy()
+        if hasattr(self, 'table_container') and self.table_container.winfo_exists():
+            self.table_container.destroy()
 
-        # Create table frame inside current center_frame
-        self.table_frame = tk.Frame(self.center_frame, bg="white")
-        self.table_frame.pack(padx=20, pady=10)
+        # Outer container
+        self.table_container = tk.Frame(self.center_frame, bg="white")
+        self.table_container.pack(padx=20, pady=10, fill="both", expand=True)
 
+        # Canvas with scrollbar
+        canvas = tk.Canvas(self.table_container, width=875, height=400, bg="white")
+        scrollbar = ttk.Scrollbar(self.table_container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg="white")
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Table headers
         headers = ["ID", "Name", "Phone", "Username", "Role", "Address", "Email", "Description", "Actions"]
         for col, header in enumerate(headers):
-            tk.Label(self.table_frame, text=header, font=("Segoe UI", 10, "bold"),
+            tk.Label(scrollable_frame, text=header, font=("Segoe UI", 10, "bold"),
                     bg="#dbeafe", fg="black", borderwidth=1, relief="solid", padx=5, pady=5).grid(row=0, column=col, sticky="nsew")
 
+        # User rows
         users_list = self.User.getUsers("", -1) if not filter_text else self.User.getUsers(filter_text, -1)
 
         for row_idx, user in enumerate(users_list, start=1):
             fields = [user.id, user.fullName, user.telephone, user.userName, user.role,
                     user.address, user.email, user.description]
             for col_idx, field in enumerate(fields):
-                tk.Label(self.table_frame, text=str(field), bg="white", fg="black", borderwidth=1,
+                tk.Label(scrollable_frame, text=str(field), bg="white", fg="black", borderwidth=1,
                         relief="solid", padx=4, pady=4, anchor="w", justify="left").grid(row=row_idx, column=col_idx, sticky="nsew")
 
-            action_frame = tk.Frame(self.table_frame, bg="white")
+            action_frame = tk.Frame(scrollable_frame, bg="white")
             action_frame.grid(row=row_idx, column=len(fields), padx=4, pady=4)
 
             tk.Button(action_frame, text="Edit", width=6,
@@ -294,7 +476,7 @@ class GUI:
         if hasattr(self, 'lookup_back_button') and self.lookup_back_button.winfo_exists():
             self.lookup_back_button.destroy()
 
-        # Create a new back button inside current center_frame
+        # Back button
         self.lookup_back_button = ttk.Button(self.center_frame, text="Back", style="Exit.TButton", command=self.show_admin_page)
         self.lookup_back_button.pack(pady=20)
 
@@ -373,6 +555,8 @@ class GUI:
         confirm = messagebox.askyesno("Delete User", f"Are you sure you want to delete user ID {user_id}?")
         if confirm:
             self.User.delete(user_id)
+            messagebox.showinfo("Success", f"User ID {user_id} successfully deleted.")
+            self.display_user_table("")  # Replace this with your actual function that shows the users page
 
 # Run the application
 if __name__ == "__main__":
