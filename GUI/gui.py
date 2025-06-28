@@ -42,7 +42,7 @@ class GUI:
         center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
         center_frame.place(relx=0.5, rely=0.5, anchor='center')
 
-        tk.Label(center_frame, text="FEDE", font=("Arial", 48, "bold"),
+        tk.Label(center_frame, text="FEDET", font=("Arial", 48, "bold"),
                 bg="white", fg=self.bg_color, padx=20, pady=10).pack(pady=(0, 30))
 
         tk.Label(center_frame, text="Username", bg=self.bg_color, fg="white").pack()
