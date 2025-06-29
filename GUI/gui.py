@@ -214,42 +214,59 @@ class GUI:
             messagebox.showinfo("Model Deleted", f"Model ID {model.id} was successfully deleted.")
             self.display_model_table()  # Refresh the model table
 
-   def run_model_with_csv(self, model):
-        try:
-            res = model.predict_health_status(self.csv_path, self.User.idP)
-            print(f"Run model ID {model.id} on selected CSV {self.csv_path} result -> {res}.")
-    
-            self.clear_frame()  # Clear existing UI elements
-    
-            # Show result label
-            result_label = Label(self.root, text=f"Model prediction result: {res}", font=("Arial", 16))
-            result_label.pack(pady=10)
-    
-            # Load and display two images side-by-side
-            img1 = Image.open("image1.png")  # Replace with actual file paths
-            img2 = Image.open("image2.png")
-            img1 = img1.resize((250, 250))
-            img2 = img2.resize((250, 250))
-    
-            tk_img1 = ImageTk.PhotoImage(img1)
-            tk_img2 = ImageTk.PhotoImage(img2)
-    
-            img_frame = Frame(self.root)
-            img_frame.pack(pady=10)
-    
-            label_img1 = Label(img_frame, image=tk_img1)
-            label_img1.image = tk_img1  # Prevent garbage collection
-            label_img1.pack(side="left", padx=10)
-    
-            label_img2 = Label(img_frame, image=tk_img2)
-            label_img2.image = tk_img2
-            label_img2.pack(side="left", padx=10)
-    
-            # Add Home button
-            home_btn = Button(self.root, text="Home", command=self.show_user_page, font=("Arial", 14))
-            home_btn.pack(pady=20)
-        except Exception as e:
-            messagebox.showerror("Error", f"An error occurred while running the model: {e}")
+ def run_model_with_csv(self, model):
+    try:
+        res = model.predict_health_status(self.csv_path, self.User.idP)
+        print(f"Run model ID {model.id} on selected CSV {self.csv_path} result -> {res}.")
+
+        # Clear existing screen
+        self.clear_frame()
+
+        # Create outer container frame (centered like in display_user_table)
+        self.result_container = tk.Frame(self.center_frame, bg="white")
+        self.result_container.pack(padx=20, pady=10, expand=True)
+
+        # Styled result label (similar to table headers)
+        result_label = tk.Label(
+            self.result_container,
+            text=f"Model prediction result: {res}",
+            font=("Segoe UI", 12, "bold"),
+            bg="#dbeafe",
+            fg="black",
+            padx=10,
+            pady=10,
+            borderwidth=1,
+            relief="solid"
+        )
+        result_label.pack(pady=(0, 20))
+
+        # Load and display two images side by side
+        img1 = Image.open("image1.png")  # Replace with your image path
+        img2 = Image.open("image2.png")
+        img1 = img1.resize((250, 250))
+        img2 = img2.resize((250, 250))
+
+        tk_img1 = ImageTk.PhotoImage(img1)
+        tk_img2 = ImageTk.PhotoImage(img2)
+
+        img_frame = tk.Frame(self.result_container, bg="white")
+        img_frame.pack()
+
+        label_img1 = tk.Label(img_frame, image=tk_img1, bg="white", borderwidth=1, relief="solid")
+        label_img1.image = tk_img1
+        label_img1.pack(side="left", padx=10)
+
+        label_img2 = tk.Label(img_frame, image=tk_img2, bg="white", borderwidth=1, relief="solid")
+        label_img2.image = tk_img2
+        label_img2.pack(side="left", padx=10)
+
+        # Home button: clears and returns to user page
+        def go_home():
+            self.clear_frame()
+            self.show_user_page()
+
+        home_btn = ttk.Button(self.result_container, text="Home", style="Exit.TButton", command=go_home)
+        home_btn.pack(pady=30)
 
     def confirm_exit(self):
         answer = messagebox.askyesno("Exit Confirmation", "Do you want to log out?")
