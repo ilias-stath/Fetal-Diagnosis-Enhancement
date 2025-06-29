@@ -219,29 +219,32 @@ class GUI:
         res = model.predict_health_status(self.csv_path, self.User.idP)
         print(f"Run model ID {model.id} on selected CSV {self.csv_path} result -> {res}.")
 
-        # Clear existing screen
+        # Clear the screen
         self.clear_frame()
 
-        # Create outer container frame (centered like in display_user_table)
-        self.result_container = tk.Frame(self.center_frame, bg="white")
-        self.result_container.pack(padx=20, pady=10, expand=True)
+        # Center frame like in show_admin_page
+        center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        center_frame.place(relx=0.5, rely=0.5, anchor='center')
 
-        # Styled result label (similar to table headers)
-        result_label = tk.Label(
-            self.result_container,
-            text=f"Model prediction result: {res}",
-            font=("Segoe UI", 12, "bold"),
-            bg="#dbeafe",
-            fg="black",
-            padx=10,
-            pady=10,
-            borderwidth=1,
-            relief="solid"
-        )
-        result_label.pack(pady=(0, 20))
+        # Result label styled similarly
+        tk.Label(
+            center_frame,
+            text=f"Model prediction result:\n{res}",
+            font=("Arial", 20, "bold"),
+            bg="white",
+            fg=self.bg_color,
+            padx=30,
+            pady=20,
+            bd=2,
+            relief="groove"
+        ).pack(pady=(0, 30))
+
+        # Image frame
+        img_frame = tk.Frame(center_frame, bg="white")
+        img_frame.pack()
 
         # Load and display two images side by side
-        img1 = Image.open("image1.png")  # Replace with your image path
+        img1 = Image.open("image1.png")  # Replace with your actual paths
         img2 = Image.open("image2.png")
         img1 = img1.resize((250, 250))
         img2 = img2.resize((250, 250))
@@ -249,24 +252,32 @@ class GUI:
         tk_img1 = ImageTk.PhotoImage(img1)
         tk_img2 = ImageTk.PhotoImage(img2)
 
-        img_frame = tk.Frame(self.result_container, bg="white")
-        img_frame.pack()
-
-        label_img1 = tk.Label(img_frame, image=tk_img1, bg="white", borderwidth=1, relief="solid")
+        label_img1 = tk.Label(img_frame, image=tk_img1, bg="white", bd=2, relief="solid")
         label_img1.image = tk_img1
         label_img1.pack(side="left", padx=10)
 
-        label_img2 = tk.Label(img_frame, image=tk_img2, bg="white", borderwidth=1, relief="solid")
+        label_img2 = tk.Label(img_frame, image=tk_img2, bg="white", bd=2, relief="solid")
         label_img2.image = tk_img2
         label_img2.pack(side="left", padx=10)
 
-        # Home button: clears and returns to user page
+        # Home button below images
         def go_home():
             self.clear_frame()
             self.show_user_page()
 
-        home_btn = ttk.Button(self.result_container, text="Home", style="Exit.TButton", command=go_home)
-        home_btn.pack(pady=30)
+        ttk.Button(center_frame, text="Home", style="Exit.TButton", command=go_home).pack(pady=30)
+
+    except Exception as e:
+        self.clear_frame()
+
+        error_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        error_frame.place(relx=0.5, rely=0.5, anchor='center')
+
+        tk.Label(error_frame, text=f"An error occurred:\n{e}",
+                 font=("Arial", 16), fg="red", bg="white",
+                 padx=20, pady=20, bd=2, relief="groove").pack(pady=10)
+
+        ttk.Button(error_frame, text="Back", style="Exit.TButton", command=self.show_user_page).pack(pady=20)
 
     def confirm_exit(self):
         answer = messagebox.askyesno("Exit Confirmation", "Do you want to log out?")
