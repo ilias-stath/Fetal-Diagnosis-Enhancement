@@ -28,7 +28,8 @@ if not os.path.exists(MODELS_DIR):
     os.makedirs(MODELS_DIR)
 if not os.path.exists(EDA_PLOTS_DIR):
     os.makedirs(EDA_PLOTS_DIR)
-
+if not os.path.exists(PREDICTION_PLOTS_DIR): ### ΝΕΟΣ ΚΩΔΙΚΑΣ ###
+    os.makedirs(PREDICTION_PLOTS_DIR)
 
 def is_json_format(variable):
     """
@@ -41,6 +42,65 @@ def is_json_format(variable):
         return True
     except json.JSONDecodeError:
         return False
+
+
+### ΝΕΟΣ ΚΩΔΙΚΑΣ: Βοηθητικές Συναρτήσεις για Δημιουργία Plots ###
+def plot_prediction_probabilities(probabilities, model_name):
+    """Δημιουργεί και αποθηκεύει το γράφημα πιθανοτήτων."""
+    health_map = {1: "Normal", 2: "Suspect", 3: "Pathological"}
+    labels = list(health_map.values())
+    probs = list(probabilities)
+    
+    plt.figure(figsize=(10, 6))
+    bars = sns.barplot(x=labels, y=probs, hue=labels, palette="viridis", legend=False)
+    plt.title(f'Πιθανότητες Κλάσης για την Πρόβλεψη\n(Μοντέλο: {model_name[:50]}...)')
+    plt.ylabel('Πιθανότητα')
+    plt.xlabel('Κατηγορία Υγείας')
+    plt.ylim(0, 1)
+
+    for bar in bars.patches:
+        plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02, f'{bar.get_height():.2%}', ha='center', color='black')
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"prediction_probabilities_{timestamp}.png"
+    filepath = os.path.join(PREDICTION_PLOTS_DIR, filename)
+    plt.savefig(filepath)
+    plt.close()
+    print(f"Το γράφημα πιθανοτήτων αποθηκεύτηκε στο: {filepath}")
+
+def plot_patient_comparison(patient_data, class_averages, prediction_class):
+    """Συγκρίνει τις τιμές του ασθενή με τις μέσες τιμές της προβλεπόμενης κλάσης."""
+    if class_averages is None:
+        print("\nΠληροφορία: Το γράφημα σύγκρισης παραλείφθηκε (το μοντέλο δεν περιέχει δεδομένα μέσων όρων).")
+        return
+
+    important_features = [
+        'abnormal_short_term_variability',
+        'percentage_of_time_with_abnormal_long_term_variability',
+        'histogram_mean',
+        'accelerations'
+    ]
+    
+    # Μετατροπή των patient_data σε Series για ευκολότερη διαχείριση
+    patient_series = pd.Series(patient_data)
+
+    avg_values = class_averages.loc[prediction_class][important_features]
+    patient_values = patient_series[important_features]
+
+    df_plot = pd.DataFrame({'Patient': patient_values, 'Class Average': avg_values})
+    df_plot.plot(kind='bar', figsize=(12, 7), rot=45)
+    plt.title(f'Σύγκριση Ασθενή με Μέσο Όρο "Κλάσης {int(prediction_class)}"')
+    plt.ylabel('Τιμή')
+    plt.xticks(ha='right')
+    plt.tight_layout()
+    
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"patient_comparison_{timestamp}.png"
+    filepath = os.path.join(PREDICTION_PLOTS_DIR, filename)
+    plt.savefig(filepath)
+    plt.close()
+    print(f"Το γράφημα σύγκρισης αποθηκεύτηκε στο: {filepath}")
+### ΤΕΛΟΣ ΝΕΟΥ ΚΩΔΙΚΑ ###
 
 class FetalHealthModel:
     """
@@ -61,6 +121,7 @@ class FetalHealthModel:
         # Το εκπαιδευμένο μοντέλο και ο scaler
         self.model_object = None 
         self.scaler = None
+        self.class_averages = None # Νέα μεταβλητή για τους μέσους όρους
         
 
     def storeModel(self):
@@ -93,6 +154,10 @@ class FetalHealthModel:
         
         data = pd.read_csv(csv_path)
         data = data.dropna()
+
+        ### ΑΛΛΑΓΗ: Υπολογισμός μέσων όρων ###
+        print("Υπολογισμός μέσων όρων ανά κλάση...")
+        self.class_averages = data.groupby('fetal_health').mean()
         
         X = data.drop('fetal_health', axis=1)
         y = data['fetal_health']
@@ -112,7 +177,8 @@ class FetalHealthModel:
         model_pack = {
             'model_object': self.model_object,
             'scaler': self.scaler,
-            'parameters': self.parameters 
+            'parameters': self.parameters,
+            'class_averages': self.class_averages 
         }
         self._model_binary_data = pickle.dumps(model_pack) # Μετατροπή σε bytes
 
@@ -195,7 +261,8 @@ class FetalHealthModel:
             self.model_object = model_pack['model_object']
             self.scaler = model_pack['scaler']
             self.parameters = model_pack['parameters']
-            print("Μοντέλο, scaler και παράμετροι αποκωδικοποιήθηκαν επιτυχώς.")
+            self.class_averages = model_pack.get('class_averages') 
+            print("Μοντέλο και εξαρτήσεις αποκωδικοποιήθηκαν επιτυχώς.")
         except Exception as e:
             raise ValueError(f"Σφάλμα κατά την αποκωδικοποίηση του δυαδικού μοντέλου: {e}. Βεβαιωθείτε ότι τα δεδομένα είναι έγκυρα pickled δεδομένα.")
 
@@ -218,6 +285,8 @@ class FetalHealthModel:
         except Exception as e:
             raise Exception(f"Σφάλμα κατά την ανάγνωση ή επεξεργασία του CSV αρχείου: {e}")
 
+        patient_data_dict = df.iloc[0].to_dict()
+
         # 3. Διασφάλιση ότι οι στήλες του DataFrame είναι στη σωστή σειρά
         if not all(col in df.columns for col in self.parameters):
             missing_cols = [col for col in self.parameters if col not in df.columns]
@@ -230,21 +299,26 @@ class FetalHealthModel:
         scaled_data = self.scaler.transform(df_ordered)
         
         # 5. Πρόβλεψη
-        prediction = self.model_object.predict(scaled_data)
-        
-        # Το predict επιστρέφει ένα array (π.χ. [1.]), οπότε επιστρέφουμε το πρώτο στοιχείο
-        if prediction[0] == 1:
-            prediction = "Normal"
-        elif prediction[0] == 2:
-            prediction = "Suspect"
-        else:
-            prediction = "Pathological"
+        prediction = self.model_object.predict(scaled_data)[0]
 
-        pName = ""
-        result = Results(pName,prediction,self.parameters,idP,self.id)
+                ### ΝΕΟΣ ΚΩΔΙΚΑΣ: Λήψη πιθανοτήτων ###
+        probabilities = self.model_object.predict_proba(scaled_data)[0]
+        
+        ### ΝΕΟΣ ΚΩΔΙΚΑΣ: Κλήση των συναρτήσεων για δημιουργία plots ###
+        print("\nΔημιουργία οπτικοποιήσεων πρόβλεψης...")
+        plot_prediction_probabilities(probabilities, self.model_name)
+        plot_patient_comparison(patient_data_dict, self.class_averages, prediction_class)
+        ### ΤΕΛΟΣ ΝΕΟΥ ΚΩΔΙΚΑ ###
+        
+        health_status_map = {1.0: "Normal", 2.0: "Suspect", 3.0: "Pathological"}
+        prediction_string = health_status_map.get(prediction_class, "Unknown")
+        
+        pName = "" # Αυτό θα πρέπει να το παίρνετε από κάπου, π.χ. όνομα αρχείου ή GUI
+        result = Results(pName, prediction_string, self.parameters, idP, self.id)
         result.storeResult()
 
-        return prediction
+        return prediction_string
+
 
 
     def generate_eda_plots(self):
