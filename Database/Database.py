@@ -168,37 +168,6 @@ class FetalHealthModel:
         self.storeModel()
         print(f"Model ID (από τη βάση δεδομένων): {self.id}") 
 
-    # def _load_from_db_by_id(self, model_id: int):
-    #     """
-    #     Φορτώνει τα δεδομένα του μοντέλου (δυαδικά) από τη βάση δεδομένων
-    #     και τα αποσυμπιέζει για χρήση.
-    #     """
-    #     print(f"Φόρτωση μοντέλου με ID: {model_id} από τη βάση δεδομένων...")
-        
-    #     # Κλήση της καθολικής συνάρτησης για ανάκτηση δεδομένων μοντέλου από τη βάση
-    #     model_records = get_models_from_db(model_id=model_id)
-        
-    #     if not model_records:
-    #         raise ValueError(f"Δεν βρέθηκε μοντέλο με ID: {model_id} στη βάση δεδομένων.")
-        
-    #     # Λαμβάνουμε την πρώτη (και μοναδική) εγγραφή
-    #     model_record = model_records[0] 
-
-    #     # Ανάθεση των ανακτηθέντων τιμών στα χαρακτηριστικά της κλάσης
-    #     self.id = model_record[0]
-    #     self.model_name = model_record[1]
-    #     # Μετατροπή του JSON string των παραμέτρων πίσω σε λίστα
-    #     self.parameters = json.loads(model_record[2]) 
-    #     self.idM = model_record[3]
-    #     # Τα δυαδικά δεδομένα του μοντέλου
-    #     model_data_blob = model_record[4] 
-
-    #     # Αποσυμπίεση του model_pack από τα δυαδικά δεδομένα
-    #     model_pack = joblib.loads(model_data_blob)
-    #     self.model_object = model_pack['model_object']
-    #     self.scaler = model_pack['scaler']
-        
-    #     print(f"Το μοντέλο '{self.model_name}' (ID: {self.id}) φορτώθηκε από τη βάση δεδομένων.")
 
     def predict_health_status(self, csv_path: str, idP):
         """
@@ -276,38 +245,6 @@ class FetalHealthModel:
         result.storeResult()
 
         return prediction
-    # def save_model(self, filepath: str):
-    #     """
-    #     Αποθηκεύει τα εκπαιδευμένα αντικείμενα (μοντέλο και scaler) σε ένα αρχείο.
-    #     Αυτή η μέθοδος δεν χρησιμοποιείται πλέον στην κύρια ροή αποθήκευσης μοντέλων στη βάση δεδομένων,
-    #     καθώς τα μοντέλα αποθηκεύονται απευθείας στη βάση.
-    #     """
-    #     if self.id == -1: 
-    #         raise ValueError("Δεν υπάρχει εκπαιδευμένο μοντέλο για αποθήκευση.")
-            
-    #     model_pack = {
-    #         'model_id': self.id, 
-    #         'model_name': self.model_name,
-    #         'parameters': self.parameters,
-    #         'model_object': self.model_object,
-    #         'scaler': self.scaler
-    #     }
-    #     joblib.dump(model_pack, filepath)
-    #     print(f"Το μοντέλο αποθηκεύτηκε με επιτυχία στο: {filepath}")
-
-    # def load_model(self, filepath: str):
-    #     """
-    #     Φορτώνει τα εκπαιδευμένα αντικείμενα από ένα αρχείο.
-    #     Αυτή η μέθοδος δεν χρησιμοποιείται πλέον στην κύρια ροή φόρτωσης μοντέλων από τη βάση δεδομένων,
-    #     καθώς τα μοντέλα φορτώνονται απευθείας από τη βάση.
-    #     """
-    #     model_pack = joblib.load(filepath)
-    #     self.id = model_pack['model_id'] 
-    #     self.model_name = model_pack['model_name']
-    #     self.parameters = model_pack['parameters']
-    #     self.model_object = model_pack['model_object']
-    #     self.scaler = model_pack['scaler']
-    #     print(f"Το μοντέλο '{self.model_name}' (ID: {self.id}) φορτώθηκε από το: {filepath}")
 
 
     def generate_eda_plots(self):
@@ -336,127 +273,6 @@ class FetalHealthModel:
         plt.close()
 
         print(f"Τα EDA plots αποθηκεύτηκαν στον φάκελο: {EDA_PLOTS_DIR}")
-
-    def select_and_predict(self):
-        """
-        Επιτρέπει στον χρήστη να επιλέξει ένα μοντέλο από τη βάση δεδομένων
-        και να κάνει μια πρόβλεψη.
-        """
-        print("\n--- Πρόβλεψη με Επιλογή Μοντέλου ---")
-        
-        # Ανάκτηση όλων των μοντέλων από τη βάση δεδομένων
-        all_models_data = get_models_from_db(maker_id=self.idM) # Μόνο τα μοντέλα που έφτιαξε ο τρέχων χρήστης
-
-        if not all_models_data:
-            print("Σφάλμα: Δεν υπάρχουν εκπαιδευμένα μοντέλα στη βάση δεδομένων.")
-            return
-        
-        print("Διαθέσιμα Μοντέλα:")
-        model_map = {}
-        for i, model_record in enumerate(all_models_data, 1):
-            model_id = model_record[0]
-            model_name = model_record[1]
-            print(f"{i}. ID: {model_id} - Όνομα: {model_name}")
-            model_map[str(i)] = model_id
-        
-        choice = input(f"Επιλέξτε μοντέλο (1-{len(all_models_data)}): ")
-        if choice not in model_map:
-            print("Μη έγκυρη επιλογή.")
-            return
-        
-        selected_model_id = model_map[choice]
-        
-        # Φόρτωση του επιλεγμένου μοντέλου απευθείας από τη βάση δεδομένων
-        model_predictor = FetalHealthModel() # Δημιουργία νέας στιγμιότυπου
-        try:
-            model_predictor._load_from_db_by_id(selected_model_id)
-        except ValueError as e:
-            print(f"Σφάλμα φόρτωσης μοντέλου: {e}")
-            return
-
-        # Παράδειγμα δεδομένων ασθενούς για πρόβλεψη
-        new_patient_data = {
-            'baseline value': 134.0, 'accelerations': 0.0, 'fetal_movement': 0.0,
-            'uterine_contractions': 0.006, 'light_decelerations': 0.003, 'severe_decelerations': 0.0,
-            'prolongued_decelerations': 0.0, 'abnormal_short_term_variability': 58.0,
-            'mean_value_of_short_term_variability': 1.6, 'percentage_of_time_with_abnormal_long_term_variability': 20.0,
-            'mean_value_of_long_term_variability': 6.1, 'histogram_width': 53.0,
-            'histogram_min': 107.0, 'histogram_max': 160.0, 'histogram_number_of_peaks': 4.0,
-            'histogram_number_of_zeroes': 0.0, 'histogram_mode': 137.0, 'histogram_mean': 136.0,
-            'histogram_median': 138.0, 'histogram_variance': 4.0, 'histogram_tendency': 1.0
-        }
-        predicted_class = model_predictor.predict_health_status(new_patient_data)
-        health_map = {1: "Κανονική (Normal)", 2: "Ύποπτη (Suspect)", 3: "Παθολογική (Pathological)"}
-        predicted_text = health_map.get(predicted_class, "Άγνωστη Κατηγορία")
-        print(f"\nΧρησιμοποιώντας το μοντέλο ID: {selected_model_id}")
-        print(f"Η πρόβλεψη του μοντέλου είναι: {predicted_text} (Κλάση: {predicted_class})")
-
-
-    def delete_model(self):
-        """Επιτρέπει στον χρήστη να επιλέξει και να διαγράψει ένα εκπαιδευμένο μοντέλο."""
-        print("\n--- Διαγραφή Μοντέλου ---")
-        
-        # Λίστα μοντέλων από τη βάση δεδομένων
-        all_models_data = get_models_from_db(maker_id=self.idM) # Μόνο τα μοντέλα που έφτιαξε ο τρέχων χρήστης
-        if not all_models_data:
-            print("Δεν υπάρχουν εκπαιδευμένα μοντέλα για διαγραφή.")
-            return
-
-        print("Επιλέξτε το μοντέλο που θέλετε να διαγράψετε:")
-        model_map = {}
-        for i, model_record in enumerate(all_models_data, 1):
-            model_id = model_record[0]
-            model_name = model_record[1]
-            print(f"{i}. ID: {model_id} - Όνομα: {model_name}")
-            model_map[str(i)] = model_id
-
-        choice = input(f"Επιλέξτε μοντέλο προς διαγραφή (1-{len(all_models_data)}) ή 'q' για ακύρωση: ")
-        
-        if choice.lower() == 'q':
-            print("Η διαγραφή ακυρώθηκε.")
-            return
-            
-        if choice not in model_map:
-            print("Μη έγκυρη επιλογή.")
-            return
-
-        selected_model_id = model_map[choice]
-        
-        confirm = input(f"Είστε σίγουροι ότι θέλετε να διαγράψετε το μοντέλο ID: {selected_model_id}; Αυτή η ενέργεια δεν αναιρείται. (y/n): ")
-        if confirm.lower() != 'y':
-            print("Η διαγραφή ακυρώθηκε.")
-            return
-
-        try:
-            # 1. Διαγραφή μοντέλου από τη βάση δεδομένων
-            delete_model_from_db(selected_model_id)
-            print(f"Διαγράφηκε το μοντέλο ID: {selected_model_id} από τη βάση δεδομένων.")
-
-            # 2. Διαγραφή του φακέλου με τα plots
-            # Ανακτάμε το όνομα του μοντέλου από τη βάση δεδομένων για να βρούμε το φάκελο των plots
-            model_details_for_deletion = next((record for record in all_models_data if record[0] == selected_model_id), None)
-            if model_details_for_deletion:
-                model_name_from_db = model_details_for_deletion[1] # Όνομα μοντέλου
-                # Προσπαθούμε να εξάγουμε το UUID-like μέρος από το όνομα του μοντέλου
-                uuid_part_start = model_name_from_db.rfind(" - ")
-                if uuid_part_start != -1:
-                    # Υποθέτουμε τη μορφή "Όνομα μοντέλου - UUID - Ημερομηνία Ώρα"
-                    uuid_like_part = model_name_from_db[uuid_part_start + 3:].split(" - ")[0] 
-                    # Ανακατασκευάζουμε το όνομα του φακέλου των plots με βάση το μοτίβο
-                    plots_dir_to_delete = os.path.join(MODELS_DIR, "model_plots_" + uuid_like_part)
-                    if os.path.exists(plots_dir_to_delete):
-                        shutil.rmtree(plots_dir_to_delete)
-                        print(f"Διαγράφηκε ο φάκελος των plots: {plots_dir_to_delete}")
-                    else:
-                        print(f"Ο φάκελος των plots '{plots_dir_to_delete}' δεν βρέθηκε.")
-                else:
-                    print("Αδυναμία εύρεσης ονόματος φακέλου plots από το όνομα του μοντέλου.")
-
-
-            print("\nΗ διαγραφή ολοκληρώθηκε με επιτυχία.")
-
-        except Exception as e:
-            print(f"Προέκυψε σφάλμα κατά τη διαγραφή: {e}")
         
 
 
@@ -617,12 +433,11 @@ class Medical(User):
                 model_data=row[4]
             )
 
-            query = "SELECT user_id FROM medical_personnel WHERE id = %s"
-
-            cursor.execute(query, (model.idM,))
-            result = cursor.fetchone()
-
-            model.idM = result[0]
+            if model.idM is not None:
+                query = "SELECT user_id FROM medical_personnel WHERE id = %s"
+                cursor.execute(query, (model.idM,))
+                result = cursor.fetchone()
+                model.idM = result[0]
 
             results_list.append(model)
 
@@ -1042,7 +857,7 @@ def get_models_from_db(model_id=None, name=None, maker_id=None):
     params = []
 
     if model_id is not None and model_id != -1:
-        query += " AND (id = %s OR id = 1)" 
+        query += " AND id = %s " 
         params.append(model_id)
     if name is not None and name.strip():
         query += " AND name LIKE %s"
@@ -1050,8 +865,8 @@ def get_models_from_db(model_id=None, name=None, maker_id=None):
     if maker_id is not None and maker_id != -1:
         query += " AND maker = %s"
         params.append(maker_id)
-    if model_id is None:
-        query += " AND id = 1"
+    if model_id is None or model_id == -1:
+        query += " OR id = 1"
 
     cursor.execute(query, tuple(params))
     result = cursor.fetchall()
