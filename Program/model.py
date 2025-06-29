@@ -32,6 +32,7 @@ class FetalHealthModel:
         # Είναι κρίσιμο να αποθηκεύσουμε και το scaler μαζί με το μοντέλο!
         self.model_object = None # Το ίδιο το εκπαιδευμένο μοντέλο
         self.scaler = None # Ο scaler που χρησιμοποιήθηκε για την κανονικοποίηση
+        self.class_averages = None # Νέα μεταβλητή για τους μέσους όρους
 
     def train_new_model(self, csv_path: str, models_dir: str):
         """
@@ -47,6 +48,12 @@ class FetalHealthModel:
         # 1. Φόρτωση και αρχική επεξεργασία δεδομένων
         data = pd.read_csv(csv_path)
         data = data.dropna() # Αφαίρεση γραμμών με ελλιπή δεδομένα (αν υπάρχουν)
+
+                # === ΤΟΠΟΘΕΤΗΣΤΕ ΤΟΝ ΚΩΔΙΚΑ ΑΚΡΙΒΩΣ ΕΔΩ ===
+        # ====================================================================
+        print("Υπολογισμός μέσων όρων ανά κλάση...")
+        self.class_averages = data.groupby('fetal_health').mean()
+        # ====================================================================
         
         # 2. Διαχωρισμός παραμέτρων (X) και στόχου (y)
         X = data.drop('fetal_health', axis=1)
@@ -71,7 +78,7 @@ class FetalHealthModel:
         predictions = self.model_object.predict(X_test_scaled)
         accuracy = accuracy_score(y_test, predictions)
         self.model_id = str(uuid.uuid4())
-# Δημιουργία ενός φακέλου ειδικά για τα plots αυτού του μοντέλου
+        # Δημιουργία ενός φακέλου ειδικά για τα plots αυτού του μοντέλου
         model_plots_dir = os.path.join(models_dir, self.model_id)
         if not os.path.exists(model_plots_dir):
             os.makedirs(model_plots_dir)
@@ -125,21 +132,20 @@ class FetalHealthModel:
             int: Η πρόβλεψη (1: Normal, 2: Suspect, 3: Pathological).
         """
         if self.model_object is None or self.scaler is None:
-            raise ValueError("Το μοντέλο δεν έχει εκπαιδευτεί ή φορτωθεί. Καλέστε πρώτα τη μέθοδο train_new_model() ή load_model().")
+            raise ValueError("Το μοντέλο δεν έχει εκπαιδευτεί ή φορτωθεί.")
 
-        # Μετατροπή του λεξικού σε Pandas DataFrame
         df = pd.DataFrame([input_data])
-        
-        # Διασφάλιση ότι οι στήλες είναι στη σωστή σειρά
         df = df[self.parameters]
-        
-        # Εφαρμογή του ΙΔΙΟΥ scaler που χρησιμοποιήθηκε στην εκπαίδευση
         scaled_data = self.scaler.transform(df)
         
-        # Πρόβλεψη
+        # Πρόβλεψη της κλάσης
         prediction = self.model_object.predict(scaled_data)
         
-        return prediction[0]
+        # Πρόβλεψη των πιθανοτήτων
+        probabilities = self.model_object.predict_proba(scaled_data)
+        
+        # Επιστρέφουμε και τα δύο
+        return prediction[0], probabilities[0]
 
     def save_model(self, filepath: str):
         """Αποθηκεύει τα εκπαιδευμένα αντικείμενα (μοντέλο και scaler) σε ένα αρχείο."""
@@ -152,7 +158,8 @@ class FetalHealthModel:
             'model_name': self.model_name,
             'parameters': self.parameters,
             'model_object': self.model_object,
-            'scaler': self.scaler
+            'scaler': self.scaler,
+            'class_averages': self.class_averages # Αποθηκεύουμε και τους μέσους όρους!
         }
         joblib.dump(model_pack, filepath)
         print(f"Το μοντέλο αποθηκεύτηκε με επιτυχία στο: {filepath}")
@@ -165,6 +172,7 @@ class FetalHealthModel:
         self.parameters = model_pack['parameters']
         self.model_object = model_pack['model_object']
         self.scaler = model_pack['scaler']
+        self.class_averages = model_pack.get('class_averages') # Φορτώνουμε τους μέσους όρους
         print(f"Το μοντέλο '{self.model_name}' (ID: {self.model_id}) φορτώθηκε από το: {filepath}")
         
     

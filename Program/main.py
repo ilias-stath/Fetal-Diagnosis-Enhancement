@@ -60,6 +60,39 @@ def save_registry(registry):
     with open(REGISTRY_FILE, 'w') as f:
         json.dump(registry, f, indent=4)
 
+def plot_prediction_probabilities(probabilities, health_map, model_id):
+    """Δημιουργεί και αποθηκεύει το γράφημα πιθανοτήτων."""
+    labels = list(health_map.values())
+    probs = list(probabilities)
+    
+    plt.figure(figsize=(10, 6))
+    bars = sns.barplot(x=labels, y=probs, palette="viridis")
+    plt.title(f'Πιθανότητες Κλάσης για την Πρόβλεψη (Μοντέλο ID: {model_id[:8]}...)')
+    plt.ylabel('Πιθανότητα')
+    plt.xlabel('Κατηγορία Υγείας')
+    plt.ylim(0, 1)
+
+    # Προσθήκη τιμών πάνω από τις ράβδους
+    for bar in bars.patches:
+        plt.text(bar.get_x() + bar.get_width() / 2, 
+                 bar.get_height() + 0.02, 
+                 f'{bar.get_height():.2%}', 
+                 ha='center', 
+                 color='black')
+
+    # Δημιουργία μοναδικού ονόματος αρχείου για την εικόνα
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"prediction_probabilities_{timestamp}.png"
+    # Αποθήκευση σε έναν γενικό φάκελο προβλέψεων
+    predictions_dir = "prediction_plots"
+    if not os.path.exists(predictions_dir):
+        os.makedirs(predictions_dir)
+
+    filepath = os.path.join(predictions_dir, filename)
+    plt.savefig(filepath)
+    plt.close()
+    print(f"Το γράφημα πιθανοτήτων αποθηκεύτηκε στο: {filepath}")
+
 def train_and_save_new_model():
     """Εκπαιδεύει ένα νέο μοντέλο και το αποθηκεύει με μοναδικό όνομα."""
     print("\n--- Εκπαίδευση Νέου Μοντέλου ---")
@@ -83,6 +116,34 @@ def train_and_save_new_model():
     
     print(f"\nΤο νέο μοντέλο με ID: {model_trainer.model_id} εκπαιδεύτηκε και αποθηκεύτηκε.")
     print(f"Τα plots αξιολόγησης βρίσκονται στον φάκελο: {os.path.join(MODELS_DIR, model_trainer.model_id)}")
+
+def plot_patient_comparison(patient_data, class_averages, important_features, prediction_class):
+    """
+    Συγκρίνει τις τιμές του ασθενή με τις μέσες τιμές της προβλεπόμενης κλάσης
+    για τις πιο σημαντικές παραμέτρους.
+    """
+    if class_averages is None:
+        return # Δεν κάνουμε τίποτα αν δεν υπάρχουν αποθηκευμένοι μέσοι όροι
+
+    # Παίρνουμε τις μέσες τιμές για την κλάση που προέβλεψε το μοντέλο
+    avg_values = class_averages.loc[prediction_class][important_features]
+    patient_values = {feat: patient_data[feat] for feat in important_features}
+
+    df_plot = pd.DataFrame({'Patient': patient_values, 'Class Average': avg_values})
+
+    df_plot.plot(kind='bar', figsize=(12, 7), rot=45)
+    plt.title(f'Σύγκριση Ασθενή με Μέσο Όρο "Κλάσης {int(prediction_class)}"')
+    plt.ylabel('Τιμή')
+    plt.xticks(ha='right')
+    plt.tight_layout()
+    
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"patient_comparison_{timestamp}.png"
+    predictions_dir = "prediction_plots" # Χρησιμοποιούμε τον ίδιο φάκελο
+    filepath = os.path.join(predictions_dir, filename)
+    plt.savefig(filepath)
+    plt.close()
+    print(f"Το γράφημα σύγκρισης αποθηκεύτηκε στο: {filepath}")
 
 def select_and_predict():
     print("\n--- Πρόβλεψη με Επιλογή Μοντέλου ---")
@@ -114,11 +175,22 @@ def select_and_predict():
         'histogram_number_of_zeroes': 0.0, 'histogram_mode': 137.0, 'histogram_mean': 136.0,
         'histogram_median': 138.0, 'histogram_variance': 4.0, 'histogram_tendency': 1.0
     }
-    predicted_class = model_predictor.predict_health_status(new_patient_data)
+    predicted_class, class_probabilities = model_predictor.predict_health_status(new_patient_data)
     health_map = {1: "Κανονική (Normal)", 2: "Ύποπτη (Suspect)", 3: "Παθολογική (Pathological)"}
     predicted_text = health_map.get(predicted_class, "Άγνωστη Κατηγορία")
     print(f"\nΧρησιμοποιώντας το μοντέλο ID: {selected_model_id}")
     print(f"Η πρόβλεψη του μοντέλου είναι: {predicted_text} (Κλάση: {predicted_class})")
+    plot_prediction_probabilities(class_probabilities, health_map, selected_model_id)
+    important_features_to_compare = [
+        'abnormal_short_term_variability',
+        'percentage_of_time_with_abnormal_long_term_variability',
+        'histogram_mean',
+        'accelerations'
+    ]
+    plot_patient_comparison(new_patient_data, 
+                            model_predictor.class_averages, 
+                            important_features_to_compare,
+                            predicted_class)
 
 
 def delete_model():
