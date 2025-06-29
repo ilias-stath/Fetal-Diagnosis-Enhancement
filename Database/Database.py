@@ -10,7 +10,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score
-import joblib
 import uuid
 import os 
 import shutil
@@ -18,16 +17,13 @@ import datetime
 import pickle
 
 # Σταθερές για εύκολη διαχείριση
-# EDA_PLOTS_DIR = "eda_plots" 
-# REGISTRY_FILE = os.path.join(MODELS_DIR, "models_registry.json") # Αυτό το αρχείο μητρώου δεν είναι πλέον απαραίτητο με την αποθήκευση στη βάση δεδομένων
+
 DATASET_CSV = 'fetal_health.csv'
 PREDICTION_PLOTS_DIR = 'prediction_plots'
 
 # Δημιουργία φακέλων αν δεν υπάρχουν
 
-# if not os.path.exists(EDA_PLOTS_DIR):
-#     os.makedirs(EDA_PLOTS_DIR)
-if not os.path.exists(PREDICTION_PLOTS_DIR): ### ΝΕΟΣ ΚΩΔΙΚΑΣ ###
+if not os.path.exists(PREDICTION_PLOTS_DIR): 
     os.makedirs(PREDICTION_PLOTS_DIR)
 
 
@@ -56,7 +52,6 @@ def is_json_format(variable):
         return False
 
 
-### ΝΕΟΣ ΚΩΔΙΚΑΣ: Βοηθητικές Συναρτήσεις για Δημιουργία Plots ###
 def plot_prediction_probabilities(probabilities, model_name):
     """Δημιουργεί και αποθηκεύει το γράφημα πιθανοτήτων."""
     health_map = {1: "Normal", 2: "Suspect", 3: "Pathological"}
@@ -80,39 +75,6 @@ def plot_prediction_probabilities(probabilities, model_name):
     plt.close()
     print(f"Το γράφημα πιθανοτήτων αποθηκεύτηκε στο: {filepath}")
 
-# def plot_patient_comparison(patient_data, class_averages, prediction_class):
-#     """Συγκρίνει τις τιμές του ασθενή με τις μέσες τιμές της προβλεπόμενης κλάσης."""
-#     if class_averages is None:
-#         print("\nΠληροφορία: Το γράφημα σύγκρισης παραλείφθηκε (το μοντέλο δεν περιέχει δεδομένα μέσων όρων).")
-#         return
-
-#     important_features = [
-#         'abnormal_short_term_variability',
-#         'percentage_of_time_with_abnormal_long_term_variability',
-#         'histogram_mean',
-#         'accelerations'
-#     ]
-    
-#     # Μετατροπή των patient_data σε Series για ευκολότερη διαχείριση
-#     patient_series = pd.Series(patient_data)
-
-#     avg_values = class_averages.loc[prediction_class][important_features]
-#     patient_values = patient_series[important_features]
-
-#     df_plot = pd.DataFrame({'Patient': patient_values, 'Class Average': avg_values})
-#     df_plot.plot(kind='bar', figsize=(12, 7), rot=45)
-#     plt.title(f'Σύγκριση Ασθενή με Μέσο Όρο "Κλάσης {int(prediction_class)}"')
-#     plt.ylabel('Τιμή')
-#     plt.xticks(ha='right')
-#     plt.tight_layout()
-    
-#     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-#     filename = f"patient_comparison_{timestamp}.png"
-#     filepath = os.path.join(PREDICTION_PLOTS_DIR, filename)
-#     plt.savefig(filepath)
-#     plt.close()
-#     print(f"Το γράφημα σύγκρισης αποθηκεύτηκε στο: {filepath}")
-# ### ΤΕΛΟΣ ΝΕΟΥ ΚΩΔΙΚΑ ###
 
 class FetalHealthModel:
     """
@@ -247,7 +209,7 @@ class FetalHealthModel:
         print(f"Model ID (από τη βάση δεδομένων): {self.id}") 
 
 
-    def predict_health_status(self, csv_path: str, idP):
+    def predict_health_status(self, csv_path: str, idP, pName):
         """
         Προβλέπει την κατάσταση υγείας ενός ασθενή χρησιμοποιώντας ένα μοντέλο
         που έχει ήδη φορτωθεί στην κλάση (από BLOB δεδομένα).
@@ -327,40 +289,12 @@ class FetalHealthModel:
         health_status_map = {1.0: "Normal", 2.0: "Suspect", 3.0: "Pathological"}
         prediction_string = health_status_map.get(prediction_class, "Unknown")
         
-        pName = "" # Αυτό θα πρέπει να το παίρνετε από κάπου, π.χ. όνομα αρχείου ή GUI
         result = Results(pName, prediction_string, self.parameters, idP, self.id)
         result.storeResult()
 
         return prediction_string
 
 
-
-    # def generate_eda_plots(self):
-    #     """Δημιουργεί και αποθηκεύει όλες τις οπτικοποιήσεις EDA."""
-    #     print("\nΔημιουργία και αποθήκευση EDA plots...")
-    #     if not os.path.exists(DATASET_CSV):
-    #         print(f"Σφάλμα: Το αρχείο dataset '{DATASET_CSV}' δεν βρέθηκε.")
-    #         return
-
-    #     data = pd.read_csv(DATASET_CSV)
-
-    #     # 1. Κατανομή Κλάσεων
-    #     plt.figure(figsize=(8, 6))
-    #     sns.countplot(x='fetal_health', data=data)
-    #     plt.title('Κατανομή Κλάσεων Υγείας Εμβρύου')
-    #     plt.xlabel('Κατηγορία Υγείας (1: Normal, 2: Suspect, 3: Pathological)')
-    #     plt.ylabel('Αριθμός Περιστατικών')
-    #     plt.savefig(os.path.join(EDA_PLOTS_DIR, 'class_distribution.png'))
-    #     plt.close()
-
-    #     # 2. Πίνακας Συσχέτισης
-    #     plt.figure(figsize=(20, 16))
-    #     sns.heatmap(data.corr(), cmap='coolwarm')
-    #     plt.title('Πίνακας Συσχέτισης Παραμέτρων')
-    #     plt.savefig(os.path.join(EDA_PLOTS_DIR, 'correlation_heatmap.png'))
-    #     plt.close()
-
-    #     print(f"Τα EDA plots αποθηκεύτηκαν στον φάκελο: {EDA_PLOTS_DIR}")
         
 
 
@@ -930,16 +864,6 @@ def get_models_from_db(model_id=None, name=None, maker_id=None):
     conn = connect()
     cursor = conn.cursor()
 
-    # query = "SELECT id FROM medical_personnel WHERE user_id = %s"
-
-    # print(maker_id)
-
-    # cursor.execute(query, (maker_id,))
-    # result = cursor.fetchone()
-
-    # maker_id = result[0]
-
-    # print(maker_id)
 
     query = "SELECT id, name, parameters, maker, model_data FROM model WHERE 1=1"
     params = []
@@ -988,72 +912,6 @@ def delete_model_from_db(model_id):
     conn.close()
     print(f"Model ID: {model_id} deleted from database.")
 
-
-# parameters = {
-#     "parameter1": 100,
-#     "parameter2": 100,
-#     "parameter3": 90
-# }
-# user = login('george_ktist','123456789')
-# user.printy()
-# print(postResults("2","test subject 3","Normal",parameters))
-# print(getData('test subject 1', '1'))
-
-# print(getResults("",2))
-
-# Admin = login("ilias_stath","123456789")
-# users_list = Admin.getUsers("agasdgd",-1)
-# for user in users_list:
-    
-#     # Update user info using admin
-#     Admin.updateUser(user, {
-#         "email": "ktist@",
-#         "description": "A9",
-#     })
-
-# Admin.delete(5)
-
-
-#-----Do the hash for every knew user
-
-
-# conn = connect()
-# cursor = conn.cursor()
-
-# plain_password = "asd1sdd"
-# hashed_password = bcrypt.hashpw(plain_password.encode('utf-8'), bcrypt.gensalt())
-
-# query = """
-#     INSERT INTO users (fullName, username, password, role, telephone, email, address) 
-#     VALUES (%s, %s, %s, %s, %s, %s, %s)
-# """
-
-# data = ("agasdgd", "gasdqwef", hashed_password.decode('utf-8'), "admin", "+306916644999", "ecew@uowm.gr", "koza13ni")
-# cursor.execute(query, data)
-# conn.commit()
-
-# print("User inserted successfully.")
-
-# # Example SELECT query
-# select_query = "SELECT * FROM users"
-# cursor.execute(select_query)
-
-# # Fetch all rows
-# rows = cursor.fetchall()
-
-# for row in rows:
-#     print(row)
-
-# # Close cursor and connection
-# cursor.close()
-# conn.close()
-# # print("Connect",conn)
-
-# lol = login("george_ktist","123456789")
-# users_list = lol.getModels(-1,"")
-# for user in users_list:
-#     # Update user info using admin
-#     print(user.id,user.model_name,user.idM)
 
 
 #ALTER TABLE users AUTO_INCREMENT = 1;
