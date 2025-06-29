@@ -38,6 +38,17 @@ class GUI:
             widget.destroy()
         self.main_frame.configure(bg=self.bg_color)
 
+    def round_corners(img, radius):
+        # Create a rounded mask
+        mask = Image.new("L", img.size, 0)
+        draw = ImageDraw.Draw(mask)
+        draw.rounded_rectangle((0, 0) + img.size, radius=radius, fill=255)
+        
+        # Apply the mask to the image
+        rounded = Image.new("RGBA", img.size)
+        rounded.paste(img, (0, 0), mask)
+        return rounded
+    
     def create_widgets(self):
         self.clear_frame()
         self.current_page = "login"
@@ -45,12 +56,13 @@ class GUI:
         center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
         center_frame.place(relx=0.5, rely=0.5, anchor='center')
     
-        # Load and display logo image (with transparent background support)
         try:
-            logo_image = Image.open("logo.png").convert("RGBA")  # Transparent image
-            logo_image = logo_image.resize((150, 150), Image.ANTIALIAS)
-            self.logo_photo = ImageTk.PhotoImage(logo_image)  # Keep a reference!
+            # Open, resize and round the image
+            logo_image = Image.open("logo.jpg").convert("RGBA")
+            logo_image = logo_image.resize((150, 150), Image.Resampling.LANCZOS)
+            logo_image = round_corners(logo_image, radius=30)
     
+            self.logo_photo = ImageTk.PhotoImage(logo_image)
             tk.Label(center_frame, image=self.logo_photo, bg="white").pack(pady=(0, 30))
         except Exception as e:
             print(f"Error loading logo: {e}")
@@ -70,7 +82,7 @@ class GUI:
         tk.Button(center_frame, text="Exit", command=self.root.quit, width=20, height=1).pack(pady=(5, 0))
     
         self.root.bind("<Escape>", lambda event: self.root.attributes('-fullscreen', False))
-    
+        
     def login(self):
         user = self.username_entry.get()
         pw = self.password_entry.get()
