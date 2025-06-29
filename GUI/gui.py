@@ -214,12 +214,40 @@ class GUI:
             messagebox.showinfo("Model Deleted", f"Model ID {model.id} was successfully deleted.")
             self.display_model_table()  # Refresh the model table
 
-    def run_model_with_csv(self, model):
+   def run_model_with_csv(self, model):
         try:
             res = model.predict_health_status(self.csv_path, self.User.idP)
             print(f"Run model ID {model.id} on selected CSV {self.csv_path} result -> {res}.")
-            messagebox.showinfo("Success", "Model prediction was created and saved successfully.")
-            self.show_user_page()  # Redirect to user's main screen
+    
+            self.clear_frame()  # Clear existing UI elements
+    
+            # Show result label
+            result_label = Label(self.root, text=f"Model prediction result: {res}", font=("Arial", 16))
+            result_label.pack(pady=10)
+    
+            # Load and display two images side-by-side
+            img1 = Image.open("image1.png")  # Replace with actual file paths
+            img2 = Image.open("image2.png")
+            img1 = img1.resize((250, 250))
+            img2 = img2.resize((250, 250))
+    
+            tk_img1 = ImageTk.PhotoImage(img1)
+            tk_img2 = ImageTk.PhotoImage(img2)
+    
+            img_frame = Frame(self.root)
+            img_frame.pack(pady=10)
+    
+            label_img1 = Label(img_frame, image=tk_img1)
+            label_img1.image = tk_img1  # Prevent garbage collection
+            label_img1.pack(side="left", padx=10)
+    
+            label_img2 = Label(img_frame, image=tk_img2)
+            label_img2.image = tk_img2
+            label_img2.pack(side="left", padx=10)
+    
+            # Add Home button
+            home_btn = Button(self.root, text="Home", command=self.show_user_page, font=("Arial", 14))
+            home_btn.pack(pady=20)
         except Exception as e:
             messagebox.showerror("Error", f"An error occurred while running the model: {e}")
 
