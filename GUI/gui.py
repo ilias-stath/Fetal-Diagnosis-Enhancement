@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
 import Database as DB
 from PIL import Image, ImageTk
+import os
+import glob
 
 class GUI:
     def __init__(self, root):
@@ -249,21 +251,17 @@ class GUI:
             img_frame.pack()
 
             # Load and display two images side by side
-            img1 = Image.open("gay ktist.jpg")  # Replace with your actual paths
-            img2 = Image.open("gay pap.jpg")
-            img1 = img1.resize((250, 250))
-            img2 = img2.resize((250, 250))
+            image_dir = "prediction_plots"
+            png_files = sorted(glob.glob(os.path.join(image_dir, "*.png")))
 
-            tk_img1 = ImageTk.PhotoImage(img1)
-            tk_img2 = ImageTk.PhotoImage(img2)
+            if png_files:
+                img = Image.open(png_files[0]).resize((600, 600))
 
-            label_img1 = tk.Label(img_frame, image=tk_img1, bg="white", bd=2, relief="solid")
-            label_img1.image = tk_img1
-            label_img1.pack(side="left", padx=10)
+            tk_img = ImageTk.PhotoImage(img)
 
-            label_img2 = tk.Label(img_frame, image=tk_img2, bg="white", bd=2, relief="solid")
-            label_img2.image = tk_img2
-            label_img2.pack(side="left", padx=10)
+            label_img = tk.Label(img_frame, image=tk_img, bg="white", bd=2, relief="solid")
+            label_img.image = tk_img
+            label_img.pack(side="left", padx=10)
 
             # Home button below images
             def go_home():
@@ -298,58 +296,63 @@ class GUI:
             fields = [user.id, user.patientName, user.fetalHealth, user.parameters, user.idMo]
         
 
-  def train_model(self):
-    if self.csv_path:
-        model = DB.FetalHealthModel(-1, "", "", self.User.id, "")
-        model.train_new_model(self.csv_path)
+    def train_model(self):
+        if self.csv_path:
+            model = DB.FetalHealthModel(-1, "", "", self.User.id, "")
+            model.train_new_model(self.csv_path)
 
-        # Clear screen before showing UI
-        self.clear_frame()
-
-        # Centered content frame
-        center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
-        center_frame.place(relx=0.5, rely=0.5, anchor='center')
-
-        # Success label
-        tk.Label(
-            center_frame,
-            text="Model trained successfully!",
-            font=("Arial", 20, "bold"),
-            bg="white",
-            fg=self.bg_color,
-            padx=30,
-            pady=20,
-            bd=2,
-            relief="groove"
-        ).pack(pady=(0, 30))
-
-        # Image frame
-        img_frame = tk.Frame(center_frame, bg="white")
-        img_frame.pack()
-
-        # Load and resize images
-        img1 = Image.open("image1.png")  # Replace with actual paths
-        img2 = Image.open("image2.png")
-        img1 = img1.resize((250, 250))
-        img2 = img2.resize((250, 250))
-
-        tk_img1 = ImageTk.PhotoImage(img1)
-        tk_img2 = ImageTk.PhotoImage(img2)
-
-        label_img1 = tk.Label(img_frame, image=tk_img1, bg="white", bd=2, relief="solid")
-        label_img1.image = tk_img1
-        label_img1.pack(side="left", padx=10)
-
-        label_img2 = tk.Label(img_frame, image=tk_img2, bg="white", bd=2, relief="solid")
-        label_img2.image = tk_img2
-        label_img2.pack(side="left", padx=10)
-
-        # Home button
-        def go_home():
+            # Clear screen before showing UI
             self.clear_frame()
-            self.show_user_page()
 
-        ttk.Button(center_frame, text="Home", style="Exit.TButton", command=go_home).pack(pady=30)
+            # Centered content frame
+            center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+            center_frame.place(relx=0.5, rely=0.5, anchor='center')
+
+            # Success label
+            tk.Label(
+                center_frame,
+                text="Model trained successfully!",
+                font=("Arial", 20, "bold"),
+                bg="white",
+                fg=self.bg_color,
+                padx=30,
+                pady=20,
+                bd=2,
+                relief="groove"
+            ).pack(pady=(0, 30))
+
+            # Image frame
+            img_frame = tk.Frame(center_frame, bg="white")
+            img_frame.pack()
+
+            # Load and resize images
+            # Get list of PNG files in the directory (sorted alphabetically)
+            png_files = sorted(glob.glob(os.path.join("model_plots", "*.png")))
+
+            # Make sure at least two images exist
+            if len(png_files) >= 2:
+                img1 = Image.open(png_files[0])
+                img2 = Image.open(png_files[1])
+            img1 = img1.resize((600, 600))
+            img2 = img2.resize((600, 600))
+
+            tk_img1 = ImageTk.PhotoImage(img1)
+            tk_img2 = ImageTk.PhotoImage(img2)
+
+            label_img1 = tk.Label(img_frame, image=tk_img1, bg="white", bd=2, relief="solid")
+            label_img1.image = tk_img1
+            label_img1.pack(side="left", padx=10)
+
+            label_img2 = tk.Label(img_frame, image=tk_img2, bg="white", bd=2, relief="solid")
+            label_img2.image = tk_img2
+            label_img2.pack(side="left", padx=10)
+
+            # Home button
+            def go_home():
+                self.clear_frame()
+                self.show_user_page()
+
+            ttk.Button(center_frame, text="Home", style="Exit.TButton", command=go_home).pack(pady=30)
 
 
     def run_model(self):
