@@ -163,52 +163,57 @@ class GUI:
         # Destroy previous model table if it exists
         if hasattr(self, 'model_table_container') and self.model_table_container.winfo_exists():
             self.model_table_container.destroy()
-
-        # Outer container
+    
         self.model_table_container = tk.Frame(self.center_csv_frame, bg="white")
         self.model_table_container.pack(padx=20, pady=10, fill="both", expand=True)
-
-        # Canvas with vertical scrollbar
-        canvas = tk.Canvas(self.model_table_container, width=750, height=200, bg="white")
+    
+        canvas = tk.Canvas(self.model_table_container, width=875, height=250, bg="white")
         scrollbar = ttk.Scrollbar(self.model_table_container, orient="vertical", command=canvas.yview)
         scrollable_frame = tk.Frame(canvas, bg="white")
-
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(
-                scrollregion=canvas.bbox("all")
-            )
-        )
-
+    
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
-
+    
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
-
+    
         # Table headers
-        headers = ["ID", "Model Name", "Author ID", "Actions"]
+        headers = ["ID", "Model Name", "Author ID", "Patient Name", "Actions"]
         for col, header in enumerate(headers):
             tk.Label(scrollable_frame, text=header, font=("Segoe UI", 10, "bold"),
-                    bg="#dbeafe", fg="black", borderwidth=1, relief="solid", padx=5, pady=5).grid(row=0, column=col, sticky="nsew")
-
-        # Table rows
+                     bg="#dbeafe", fg="black", borderwidth=1, relief="solid", padx=5, pady=5).grid(row=0, column=col, sticky="nsew")
+    
         model_list = self.User.getModels(-1, "")
-
+    
         for row_idx, model in enumerate(model_list, start=1):
             fields = [model.id, model.model_name, model.idM]
             for col_idx, field in enumerate(fields):
                 tk.Label(scrollable_frame, text=str(field), bg="white", fg="black",
-                        borderwidth=1, relief="solid", padx=4, pady=4, anchor="w", justify="left").grid(row=row_idx, column=col_idx, sticky="nsew")
-
+                         borderwidth=1, relief="solid", padx=4, pady=4, anchor="w", justify="left").grid(row=row_idx, column=col_idx, sticky="nsew")
+    
+            # Patient name input with label
+            patient_input_frame = tk.Frame(scrollable_frame, bg="white")
+            patient_input_frame.grid(row=row_idx, column=3, padx=4, pady=4)
+    
+            tk.Label(patient_input_frame, text="Please enter patient name:", bg="white", fg="black", font=("Segoe UI", 9)).pack(anchor="w")
+            patient_name_entry = tk.Entry(patient_input_frame, width=20)
+            patient_name_entry.pack()
+            self.patient_name = patient_name_entry
+    
+            # Action buttons
             action_frame = tk.Frame(scrollable_frame, bg="white")
-            action_frame.grid(row=row_idx, column=len(fields), padx=4, pady=4)
-
+            action_frame.grid(row=row_idx, column=4, padx=4, pady=4)
+    
             tk.Button(action_frame, text="Delete", width=6,
-                    command=lambda mid=model: self.delete_model(mid)).pack(side="left", padx=2)
-
-            tk.Button(action_frame, text="Run", width=6,
-                    command=lambda mid=model: self.run_model_with_csv(mid)).pack(side="left", padx=2)
+                      command=lambda mid=model: self.delete_model(mid)).pack(side="left", padx=2)
+    
+            def run_model_wrapper(model_obj=model):
+                patient_name = self.patient_name_entries[model_obj.id].get().strip()
+                print(f"Running model {model_obj.id} for patient: '{patient_name}'")  # For now, just stored
+                self.run_model_with_csv(model_obj)
+    
+            tk.Button(action_frame, text="Run", width=6, command=run_model_wrapper).pack(side="left", padx=2)
             
     def delete_model(self, model):
         if model.idM is not None:
