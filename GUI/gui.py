@@ -1,6 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
 import Database as DB
+from PIL import Image, ImageTk
 
 class GUI:
     def __init__(self, root):
@@ -113,96 +114,11 @@ class GUI:
         )
 
     def train_model_screen(self):
-         if self.csv_path:
-            try:
-                model = DB.FetalHealthModel(-1, "", "", self.User.id, "")
-                model.train_new_model(self.csv_path)
-    
-                # Clear screen before showing UI
-                self.clear_frame()
-    
-                # Centered content frame
-                center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
-                center_frame.place(relx=0.5, rely=0.5, anchor='center')
-    
-                # Success label
-                tk.Label(
-                    center_frame,
-                    text="Model trained successfully!",
-                    font=("Arial", 20, "bold"),
-                    bg="white",
-                    fg=self.bg_color,
-                    padx=30,
-                    pady=20,
-                    bd=2,
-                    relief="groove"
-                ).pack(pady=(0, 30))
-    
-                # Image frame
-                img_frame = tk.Frame(center_frame, bg="white")
-                img_frame.pack()
-    
-                # Load and resize images
-                img1 = Image.open("image1.png")  # Replace with actual paths
-                img2 = Image.open("image2.png")
-                img1 = img1.resize((250, 250))
-                img2 = img2.resize((250, 250))
-    
-                tk_img1 = ImageTk.PhotoImage(img1)
-                tk_img2 = ImageTk.PhotoImage(img2)
-    
-                label_img1 = tk.Label(img_frame, image=tk_img1, bg="white", bd=2, relief="solid")
-                label_img1.image = tk_img1
-                label_img1.pack(side="left", padx=10)
-    
-                label_img2 = tk.Label(img_frame, image=tk_img2, bg="white", bd=2, relief="solid")
-                label_img2.image = tk_img2
-                label_img2.pack(side="left", padx=10)
-    
-                # Home button
-                def go_home():
-                    self.clear_frame()
-                    self.show_user_page()
-    
-                ttk.Button(center_frame, text="Home", style="Exit.TButton", command=go_home).pack(pady=30)
-    
-            except Exception as e:
-                self.clear_frame()
-                error_frame = tk.Frame(self.main_frame, bg=self.bg_color)
-                error_frame.place(relx=0.5, rely=0.5, anchor='center')
-    
-                tk.Label(
-                    error_frame,
-                    text=f"An error occurred:\n{e}",
-                    font=("Arial", 16),
-                    fg="red",
-                    bg="white",
-                    padx=20,
-                    pady=20,
-                    bd=2,
-                    relief="groove"
-                ).pack(pady=10)
-    
-                ttk.Button(error_frame, text="Back", style="Exit.TButton", command=self.show_user_page).pack(pady=20)
-    
-        else:
-            self.clear_frame()
-            warn_frame = tk.Frame(self.main_frame, bg=self.bg_color)
-            warn_frame.place(relx=0.5, rely=0.5, anchor='center')
-    
-            tk.Label(
-                warn_frame,
-                text="Please select a CSV file first.",
-                font=("Arial", 16),
-                fg="orange",
-                bg="white",
-                padx=20,
-                pady=20,
-                bd=2,
-                relief="groove"
-            ).pack(pady=10)
-    
-            ttk.Button(warn_frame, text="Back", style="Exit.TButton", command=self.show_user_page).pack(pady=20)
+        self.show_csv_screen(
+            title="Train Model with CSV",
+            run_command=self.train_model,
+            back_command=self.show_user_page
+        )
 
     def show_csv_screen(self, title, run_command, back_command,training=True):
         self.clear_frame()
@@ -291,78 +207,83 @@ class GUI:
 
             tk.Button(action_frame, text="Run", width=6,
                     command=lambda mid=model: self.run_model_with_csv(mid)).pack(side="left", padx=2)
+            
     def delete_model(self, model):
-        confirm = messagebox.askyesno("Delete Model", f"Are you sure you want to delete model ID {model.id}?")
-        if confirm:
-            DB.delete_model_from_db(model.id)
-            print(f"Deleted model with ID {model.id}.")
-            messagebox.showinfo("Model Deleted", f"Model ID {model.id} was successfully deleted.")
-            self.display_model_table()  # Refresh the model table
+        if model.idM is not None:
+            confirm = messagebox.askyesno("Delete Model", f"Are you sure you want to delete model ID {model.id}?")
+            if confirm:
+                DB.delete_model_from_db(model.id)
+                print(f"Deleted model with ID {model.id}.")
+                messagebox.showinfo("Model Deleted", f"Model ID {model.id} was successfully deleted.")
+                self.display_model_table()  # Refresh the model table
+        else:
+            messagebox.showinfo("Error!","Original model cannot be deleted!!")
 
- def run_model_with_csv(self, model):
-    try:
-        res = model.predict_health_status(self.csv_path, self.User.idP)
-        print(f"Run model ID {model.id} on selected CSV {self.csv_path} result -> {res}.")
+    def run_model_with_csv(self, model):
+        try:
+            res = model.predict_health_status(self.csv_path, self.User.idP)
+            print(f"Run model ID {model.id} on selected CSV {self.csv_path} result -> {res}.")
 
-        # Clear the screen
-        self.clear_frame()
-
-        # Center frame like in show_admin_page
-        center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
-        center_frame.place(relx=0.5, rely=0.5, anchor='center')
-
-        # Result label styled similarly
-        tk.Label(
-            center_frame,
-            text=f"Model prediction result:\n{res}",
-            font=("Arial", 20, "bold"),
-            bg="white",
-            fg=self.bg_color,
-            padx=30,
-            pady=20,
-            bd=2,
-            relief="groove"
-        ).pack(pady=(0, 30))
-
-        # Image frame
-        img_frame = tk.Frame(center_frame, bg="white")
-        img_frame.pack()
-
-        # Load and display two images side by side
-        img1 = Image.open("image1.png")  # Replace with your actual paths
-        img2 = Image.open("image2.png")
-        img1 = img1.resize((250, 250))
-        img2 = img2.resize((250, 250))
-
-        tk_img1 = ImageTk.PhotoImage(img1)
-        tk_img2 = ImageTk.PhotoImage(img2)
-
-        label_img1 = tk.Label(img_frame, image=tk_img1, bg="white", bd=2, relief="solid")
-        label_img1.image = tk_img1
-        label_img1.pack(side="left", padx=10)
-
-        label_img2 = tk.Label(img_frame, image=tk_img2, bg="white", bd=2, relief="solid")
-        label_img2.image = tk_img2
-        label_img2.pack(side="left", padx=10)
-
-        # Home button below images
-        def go_home():
+            # Clear the screen
             self.clear_frame()
-            self.show_user_page()
 
-        ttk.Button(center_frame, text="Home", style="Exit.TButton", command=go_home).pack(pady=30)
+            # Center frame like in show_admin_page
+            center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+            center_frame.place(relx=0.5, rely=0.5, anchor='center')
 
-    except Exception as e:
-        self.clear_frame()
+            # Result label styled similarly
+            tk.Label(
+                center_frame,
+                text=f"Model prediction result:\n{res}",
+                font=("Arial", 20, "bold"),
+                bg="white",
+                fg=self.bg_color,
+                padx=30,
+                pady=20,
+                bd=2,
+                relief="groove"
+            ).pack(pady=(0, 30))
 
-        error_frame = tk.Frame(self.main_frame, bg=self.bg_color)
-        error_frame.place(relx=0.5, rely=0.5, anchor='center')
+            # Image frame
+            img_frame = tk.Frame(center_frame, bg="white")
+            img_frame.pack()
 
-        tk.Label(error_frame, text=f"An error occurred:\n{e}",
-                 font=("Arial", 16), fg="red", bg="white",
-                 padx=20, pady=20, bd=2, relief="groove").pack(pady=10)
+            # Load and display two images side by side
+            img1 = Image.open("gay ktist.jpg")  # Replace with your actual paths
+            img2 = Image.open("gay pap.jpg")
+            img1 = img1.resize((250, 250))
+            img2 = img2.resize((250, 250))
 
-        ttk.Button(error_frame, text="Back", style="Exit.TButton", command=self.show_user_page).pack(pady=20)
+            tk_img1 = ImageTk.PhotoImage(img1)
+            tk_img2 = ImageTk.PhotoImage(img2)
+
+            label_img1 = tk.Label(img_frame, image=tk_img1, bg="white", bd=2, relief="solid")
+            label_img1.image = tk_img1
+            label_img1.pack(side="left", padx=10)
+
+            label_img2 = tk.Label(img_frame, image=tk_img2, bg="white", bd=2, relief="solid")
+            label_img2.image = tk_img2
+            label_img2.pack(side="left", padx=10)
+
+            # Home button below images
+            def go_home():
+                self.clear_frame()
+                self.show_user_page()
+
+            ttk.Button(center_frame, text="Home", style="Exit.TButton", command=go_home).pack(pady=30)
+
+        except Exception as e:
+            self.clear_frame()
+
+            error_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+            error_frame.place(relx=0.5, rely=0.5, anchor='center')
+
+            tk.Label(error_frame, text=f"An error occurred:\n{e}",
+                    font=("Arial", 16), fg="red", bg="white",
+                    padx=20, pady=20, bd=2, relief="groove").pack(pady=10)
+
+            ttk.Button(error_frame, text="Back", style="Exit.TButton", command=self.show_user_page).pack(pady=20)
+
 
     def confirm_exit(self):
         answer = messagebox.askyesno("Exit Confirmation", "Do you want to log out?")
