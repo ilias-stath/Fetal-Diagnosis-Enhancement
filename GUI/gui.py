@@ -45,7 +45,7 @@ class GUI:
         center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
         center_frame.place(relx=0.5, rely=0.5, anchor='center')
 
-        tk.Label(center_frame, text="FEDET", font=("Arial", 48, "bold"),
+        tk.Label(center_frame, text="FEDE", font=("Arial", 48, "bold"),
                 bg="white", fg=self.bg_color, padx=20, pady=10).pack(pady=(0, 30))
 
         tk.Label(center_frame, text="Username", bg=self.bg_color, fg="white").pack()
@@ -159,64 +159,64 @@ class GUI:
             else:
                 self.display_model_table()  # Show models when CSV is selected
 
-   def display_model_table(self):
-   
 
-    # --- Separate patient name section ---
-    self.patient_name_section = tk.Frame(self.center_csv_frame, bg="white")
-    self.patient_name_section.pack(pady=(10, 5))
 
-    tk.Label(self.patient_name_section, text="Please enter patient name:",
-             font=("Segoe UI", 11, "bold"), bg="white", fg="black").pack(side="left", padx=(0, 10))
+    def display_model_table(self):
+        # --- Separate patient name section ---
+        self.patient_name_section = tk.Frame(self.center_csv_frame, bg="white")
+        self.patient_name_section.pack(pady=(10, 5))
 
-    self.patient_name_var = tk.StringVar()
-    tk.Entry(self.patient_name_section, textvariable=self.patient_name_var, width=30).pack(side="left")
+        tk.Label(self.patient_name_section, text="Please enter patient name:",
+                font=("Segoe UI", 11, "bold"), bg="white", fg="black").pack(side="left", padx=(0, 10))
 
-    # --- Model table section ---
-    self.model_table_container = tk.Frame(self.center_csv_frame, bg="white")
-    self.model_table_container.pack(padx=20, pady=10, fill="both", expand=True)
+        self.patient_name_var = tk.StringVar()
+        tk.Entry(self.patient_name_section, textvariable=self.patient_name_var, width=30).pack(side="left")
 
-    canvas = tk.Canvas(self.model_table_container, width=875, height=250, bg="white")
-    scrollbar = ttk.Scrollbar(self.model_table_container, orient="vertical", command=canvas.yview)
-    scrollable_frame = tk.Frame(canvas, bg="white")
+        # --- Model table section ---
+        self.model_table_container = tk.Frame(self.center_csv_frame, bg="white")
+        self.model_table_container.pack(padx=20, pady=10, fill="both", expand=True)
 
-    scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-    canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-    canvas.configure(yscrollcommand=scrollbar.set)
+        canvas = tk.Canvas(self.model_table_container, width=750, height=250, bg="white")
+        scrollbar = ttk.Scrollbar(self.model_table_container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg="white")
 
-    canvas.pack(side="left", fill="both", expand=True)
-    scrollbar.pack(side="right", fill="y")
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
 
-    # Table headers
-    headers = ["ID", "Model Name", "Author ID", "Actions"]
-    for col, header in enumerate(headers):
-        tk.Label(scrollable_frame, text=header, font=("Segoe UI", 10, "bold"),
-                 bg="#dbeafe", fg="black", borderwidth=1, relief="solid",
-                 padx=5, pady=5).grid(row=0, column=col, sticky="nsew")
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
 
-    # Table rows
-    model_list = self.User.getModels(-1, "")
-    for row_idx, model in enumerate(model_list, start=1):
-        fields = [model.id, model.model_name, model.idM]
-        for col_idx, field in enumerate(fields):
-            tk.Label(scrollable_frame, text=str(field), bg="white", fg="black",
-                     borderwidth=1, relief="solid", padx=4, pady=4,
-                     anchor="w", justify="left").grid(row=row_idx, column=col_idx, sticky="nsew")
+        # Table headers
+        headers = ["ID", "Model Name", "Author ID", "Actions"]
+        for col, header in enumerate(headers):
+            tk.Label(scrollable_frame, text=header, font=("Segoe UI", 10, "bold"),
+                    bg="#dbeafe", fg="black", borderwidth=1, relief="solid",
+                    padx=5, pady=5).grid(row=0, column=col, sticky="nsew")
 
-        # Action buttons
-        action_frame = tk.Frame(scrollable_frame, bg="white")
-        action_frame.grid(row=row_idx, column=len(fields), padx=4, pady=4)
+        # Table rows
+        model_list = self.User.getModels(-1, "")
+        for row_idx, model in enumerate(model_list, start=1):
+            fields = [model.id, model.model_name, model.idM]
+            for col_idx, field in enumerate(fields):
+                tk.Label(scrollable_frame, text=str(field), bg="white", fg="black",
+                        borderwidth=1, relief="solid", padx=4, pady=4,
+                        anchor="w", justify="left").grid(row=row_idx, column=col_idx, sticky="nsew")
 
-        tk.Button(action_frame, text="Delete", width=6,
-                  command=lambda mid=model: self.delete_model(mid)).pack(side="left", padx=2)
+            # Action buttons
+            action_frame = tk.Frame(scrollable_frame, bg="white")
+            action_frame.grid(row=row_idx, column=len(fields), padx=4, pady=4)
 
-        def run_model_wrapper(model_obj=model):
-            patient_name = self.patient_name_var.get().strip()
-            print(f"Running model {model_obj.id} for patient: '{patient_name}'")  # Just stores it for now
-            self.run_model_with_csv(model_obj)
+            tk.Button(action_frame, text="Delete", width=6,
+                    command=lambda mid=model: self.delete_model(mid)).pack(side="left", padx=2)
 
-        tk.Button(action_frame, text="Run", width=6,
-                  command=run_model_wrapper).pack(side="left", padx=2)
+            def run_model_wrapper(model_obj=model):
+                patient_name = self.patient_name_var.get().strip()
+                print(f"Running model {model_obj.id} for patient: '{patient_name}'")  # Just stores it for now
+                self.run_model_with_csv(model_obj,patient_name)
+
+            tk.Button(action_frame, text="Run", width=6,
+                    command=run_model_wrapper).pack(side="left", padx=2)
             
     def delete_model(self, model):
         if model.idM is not None:
@@ -229,9 +229,9 @@ class GUI:
         else:
             messagebox.showinfo("Error!","Original model cannot be deleted!!")
 
-    def run_model_with_csv(self, model):
+    def run_model_with_csv(self, model,patient_name):
         try:
-            res = model.predict_health_status(self.csv_path, self.User.idP)
+            res = model.predict_health_status(self.csv_path, self.User.idP,patient_name)
             print(f"Run model ID {model.id} on selected CSV {self.csv_path} result -> {res}.")
 
             # Clear the screen
@@ -263,7 +263,7 @@ class GUI:
             png_files = sorted(glob.glob(os.path.join(image_dir, "*.png")))
 
             if png_files:
-                img = Image.open(png_files[0]).resize((600, 600))
+                img = Image.open(png_files[0]).resize((650, 600))
 
             tk_img = ImageTk.PhotoImage(img)
 
@@ -463,7 +463,7 @@ class GUI:
         self.results_table_container = tk.Frame(self.center_frame, bg="white")
         self.results_table_container.pack(padx=20, pady=10, fill="both", expand=True)
 
-        canvas = tk.Canvas(self.results_table_container, width=545, height=400, bg="white")
+        canvas = tk.Canvas(self.results_table_container, width=580, height=400, bg="white")
         scrollbar = tk.Scrollbar(self.results_table_container, orient="vertical", command=canvas.yview)
         self.results_table_frame = tk.Frame(canvas, bg="white")
 
@@ -479,7 +479,7 @@ class GUI:
         scrollbar.pack(side="right", fill="y")
 
         # Table headers
-        headers = ["ID", "Patient Name", "Fetal Health", "Parameters", "ID Mo"]
+        headers = ["ID", "Patient Name", "Fetal Health", "Parameters", "ID Model"]
         for col, header in enumerate(headers):
             tk.Label(self.results_table_frame, text=header, font=("Segoe UI", 10, "bold"),
                     bg="#dbeafe", fg="black", borderwidth=1, relief="solid", padx=5, pady=5).grid(row=0, column=col, sticky="nsew")
