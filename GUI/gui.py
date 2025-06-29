@@ -41,26 +41,36 @@ class GUI:
     def create_widgets(self):
         self.clear_frame()
         self.current_page = "login"
-
+    
         center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
         center_frame.place(relx=0.5, rely=0.5, anchor='center')
-
-        tk.Label(center_frame, text="FEDE", font=("Arial", 48, "bold"),
-                bg="white", fg=self.bg_color, padx=20, pady=10).pack(pady=(0, 30))
-
+    
+        # Load and display logo image (with transparent background support)
+        try:
+            logo_image = Image.open("logo.png").convert("RGBA")  # Transparent image
+            logo_image = logo_image.resize((150, 150), Image.ANTIALIAS)
+            self.logo_photo = ImageTk.PhotoImage(logo_image)  # Keep a reference!
+    
+            tk.Label(center_frame, image=self.logo_photo, bg="white").pack(pady=(0, 30))
+        except Exception as e:
+            print(f"Error loading logo: {e}")
+            tk.Label(center_frame, text="FEDET", font=("Arial", 48, "bold"),
+                     bg="white", fg=self.bg_color, padx=20, pady=10).pack(pady=(0, 30))
+    
+        # Login form
         tk.Label(center_frame, text="Username", bg=self.bg_color, fg="white").pack()
         self.username_entry = tk.Entry(center_frame, width=30)
         self.username_entry.pack(pady=(0, 10))
-
+    
         tk.Label(center_frame, text="Password", bg=self.bg_color, fg="white").pack()
         self.password_entry = tk.Entry(center_frame, show="*", width=30)
         self.password_entry.pack(pady=(0, 10))
-
+    
         tk.Button(center_frame, text="Login", command=self.login, width=20, height=1).pack(pady=10)
         tk.Button(center_frame, text="Exit", command=self.root.quit, width=20, height=1).pack(pady=(5, 0))
-
+    
         self.root.bind("<Escape>", lambda event: self.root.attributes('-fullscreen', False))
-
+    
     def login(self):
         user = self.username_entry.get()
         pw = self.password_entry.get()
