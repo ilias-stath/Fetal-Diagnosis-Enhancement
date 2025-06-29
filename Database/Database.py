@@ -18,18 +18,30 @@ import datetime
 import pickle
 
 # Σταθερές για εύκολη διαχείριση
-MODELS_DIR = "trained_models" # Αυτός ο φάκελος χρησιμοποιείται πλέον κυρίως για plots
-EDA_PLOTS_DIR = "eda_plots" 
+# EDA_PLOTS_DIR = "eda_plots" 
 # REGISTRY_FILE = os.path.join(MODELS_DIR, "models_registry.json") # Αυτό το αρχείο μητρώου δεν είναι πλέον απαραίτητο με την αποθήκευση στη βάση δεδομένων
 DATASET_CSV = 'fetal_health.csv'
+PREDICTION_PLOTS_DIR = 'prediction_plots'
 
 # Δημιουργία φακέλων αν δεν υπάρχουν
-if not os.path.exists(MODELS_DIR):
-    os.makedirs(MODELS_DIR)
-if not os.path.exists(EDA_PLOTS_DIR):
-    os.makedirs(EDA_PLOTS_DIR)
+
+# if not os.path.exists(EDA_PLOTS_DIR):
+#     os.makedirs(EDA_PLOTS_DIR)
 if not os.path.exists(PREDICTION_PLOTS_DIR): ### ΝΕΟΣ ΚΩΔΙΚΑΣ ###
     os.makedirs(PREDICTION_PLOTS_DIR)
+
+
+def clear_folder(folder_path):
+    """Διαγράφει όλα τα αρχεία και τους υποφακέλους μέσα σε έναν φάκελο."""
+    for filename in os.listdir(folder_path):
+        file_path = os.path.join(folder_path, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print(f'Αποτυχία διαγραφής του {file_path}.')
 
 def is_json_format(variable):
     """
@@ -68,39 +80,39 @@ def plot_prediction_probabilities(probabilities, model_name):
     plt.close()
     print(f"Το γράφημα πιθανοτήτων αποθηκεύτηκε στο: {filepath}")
 
-def plot_patient_comparison(patient_data, class_averages, prediction_class):
-    """Συγκρίνει τις τιμές του ασθενή με τις μέσες τιμές της προβλεπόμενης κλάσης."""
-    if class_averages is None:
-        print("\nΠληροφορία: Το γράφημα σύγκρισης παραλείφθηκε (το μοντέλο δεν περιέχει δεδομένα μέσων όρων).")
-        return
+# def plot_patient_comparison(patient_data, class_averages, prediction_class):
+#     """Συγκρίνει τις τιμές του ασθενή με τις μέσες τιμές της προβλεπόμενης κλάσης."""
+#     if class_averages is None:
+#         print("\nΠληροφορία: Το γράφημα σύγκρισης παραλείφθηκε (το μοντέλο δεν περιέχει δεδομένα μέσων όρων).")
+#         return
 
-    important_features = [
-        'abnormal_short_term_variability',
-        'percentage_of_time_with_abnormal_long_term_variability',
-        'histogram_mean',
-        'accelerations'
-    ]
+#     important_features = [
+#         'abnormal_short_term_variability',
+#         'percentage_of_time_with_abnormal_long_term_variability',
+#         'histogram_mean',
+#         'accelerations'
+#     ]
     
-    # Μετατροπή των patient_data σε Series για ευκολότερη διαχείριση
-    patient_series = pd.Series(patient_data)
+#     # Μετατροπή των patient_data σε Series για ευκολότερη διαχείριση
+#     patient_series = pd.Series(patient_data)
 
-    avg_values = class_averages.loc[prediction_class][important_features]
-    patient_values = patient_series[important_features]
+#     avg_values = class_averages.loc[prediction_class][important_features]
+#     patient_values = patient_series[important_features]
 
-    df_plot = pd.DataFrame({'Patient': patient_values, 'Class Average': avg_values})
-    df_plot.plot(kind='bar', figsize=(12, 7), rot=45)
-    plt.title(f'Σύγκριση Ασθενή με Μέσο Όρο "Κλάσης {int(prediction_class)}"')
-    plt.ylabel('Τιμή')
-    plt.xticks(ha='right')
-    plt.tight_layout()
+#     df_plot = pd.DataFrame({'Patient': patient_values, 'Class Average': avg_values})
+#     df_plot.plot(kind='bar', figsize=(12, 7), rot=45)
+#     plt.title(f'Σύγκριση Ασθενή με Μέσο Όρο "Κλάσης {int(prediction_class)}"')
+#     plt.ylabel('Τιμή')
+#     plt.xticks(ha='right')
+#     plt.tight_layout()
     
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"patient_comparison_{timestamp}.png"
-    filepath = os.path.join(PREDICTION_PLOTS_DIR, filename)
-    plt.savefig(filepath)
-    plt.close()
-    print(f"Το γράφημα σύγκρισης αποθηκεύτηκε στο: {filepath}")
-### ΤΕΛΟΣ ΝΕΟΥ ΚΩΔΙΚΑ ###
+#     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+#     filename = f"patient_comparison_{timestamp}.png"
+#     filepath = os.path.join(PREDICTION_PLOTS_DIR, filename)
+#     plt.savefig(filepath)
+#     plt.close()
+#     print(f"Το γράφημα σύγκρισης αποθηκεύτηκε στο: {filepath}")
+# ### ΤΕΛΟΣ ΝΕΟΥ ΚΩΔΙΚΑ ###
 
 class FetalHealthModel:
     """
@@ -191,7 +203,7 @@ class FetalHealthModel:
         # Το UUID είναι μέρος του self.model_name
         # Η λογική για την ανάκτηση αυτού του μέρους για τη διαγραφή του φακέλου βρίσκεται στη delete_model.
         uuid_part_for_folder = self.model_name[self.model_name.rfind("-") + 3:].split("-")[0]
-        model_plots_dir_path = os.path.join(MODELS_DIR, "model_plots_" + uuid_part_for_folder)
+        model_plots_dir_path = os.path.join("model_plots",uuid_part_for_folder)
         
         if not os.path.exists(model_plots_dir_path):
             os.makedirs(model_plots_dir_path)
@@ -285,7 +297,7 @@ class FetalHealthModel:
         except Exception as e:
             raise Exception(f"Σφάλμα κατά την ανάγνωση ή επεξεργασία του CSV αρχείου: {e}")
 
-        patient_data_dict = df.iloc[0].to_dict()
+        # patient_data_dict = df.iloc[0].to_dict()
 
         # 3. Διασφάλιση ότι οι στήλες του DataFrame είναι στη σωστή σειρά
         if not all(col in df.columns for col in self.parameters):
@@ -299,15 +311,17 @@ class FetalHealthModel:
         scaled_data = self.scaler.transform(df_ordered)
         
         # 5. Πρόβλεψη
-        prediction = self.model_object.predict(scaled_data)[0]
+        prediction_class = self.model_object.predict(scaled_data)[0]
 
                 ### ΝΕΟΣ ΚΩΔΙΚΑΣ: Λήψη πιθανοτήτων ###
         probabilities = self.model_object.predict_proba(scaled_data)[0]
         
+        clear_folder(PREDICTION_PLOTS_DIR)
+
         ### ΝΕΟΣ ΚΩΔΙΚΑΣ: Κλήση των συναρτήσεων για δημιουργία plots ###
         print("\nΔημιουργία οπτικοποιήσεων πρόβλεψης...")
         plot_prediction_probabilities(probabilities, self.model_name)
-        plot_patient_comparison(patient_data_dict, self.class_averages, prediction_class)
+        # plot_patient_comparison(patient_data_dict, self.class_averages, prediction_class)
         ### ΤΕΛΟΣ ΝΕΟΥ ΚΩΔΙΚΑ ###
         
         health_status_map = {1.0: "Normal", 2.0: "Suspect", 3.0: "Pathological"}
@@ -321,32 +335,32 @@ class FetalHealthModel:
 
 
 
-    def generate_eda_plots(self):
-        """Δημιουργεί και αποθηκεύει όλες τις οπτικοποιήσεις EDA."""
-        print("\nΔημιουργία και αποθήκευση EDA plots...")
-        if not os.path.exists(DATASET_CSV):
-            print(f"Σφάλμα: Το αρχείο dataset '{DATASET_CSV}' δεν βρέθηκε.")
-            return
+    # def generate_eda_plots(self):
+    #     """Δημιουργεί και αποθηκεύει όλες τις οπτικοποιήσεις EDA."""
+    #     print("\nΔημιουργία και αποθήκευση EDA plots...")
+    #     if not os.path.exists(DATASET_CSV):
+    #         print(f"Σφάλμα: Το αρχείο dataset '{DATASET_CSV}' δεν βρέθηκε.")
+    #         return
 
-        data = pd.read_csv(DATASET_CSV)
+    #     data = pd.read_csv(DATASET_CSV)
 
-        # 1. Κατανομή Κλάσεων
-        plt.figure(figsize=(8, 6))
-        sns.countplot(x='fetal_health', data=data)
-        plt.title('Κατανομή Κλάσεων Υγείας Εμβρύου')
-        plt.xlabel('Κατηγορία Υγείας (1: Normal, 2: Suspect, 3: Pathological)')
-        plt.ylabel('Αριθμός Περιστατικών')
-        plt.savefig(os.path.join(EDA_PLOTS_DIR, 'class_distribution.png'))
-        plt.close()
+    #     # 1. Κατανομή Κλάσεων
+    #     plt.figure(figsize=(8, 6))
+    #     sns.countplot(x='fetal_health', data=data)
+    #     plt.title('Κατανομή Κλάσεων Υγείας Εμβρύου')
+    #     plt.xlabel('Κατηγορία Υγείας (1: Normal, 2: Suspect, 3: Pathological)')
+    #     plt.ylabel('Αριθμός Περιστατικών')
+    #     plt.savefig(os.path.join(EDA_PLOTS_DIR, 'class_distribution.png'))
+    #     plt.close()
 
-        # 2. Πίνακας Συσχέτισης
-        plt.figure(figsize=(20, 16))
-        sns.heatmap(data.corr(), cmap='coolwarm')
-        plt.title('Πίνακας Συσχέτισης Παραμέτρων')
-        plt.savefig(os.path.join(EDA_PLOTS_DIR, 'correlation_heatmap.png'))
-        plt.close()
+    #     # 2. Πίνακας Συσχέτισης
+    #     plt.figure(figsize=(20, 16))
+    #     sns.heatmap(data.corr(), cmap='coolwarm')
+    #     plt.title('Πίνακας Συσχέτισης Παραμέτρων')
+    #     plt.savefig(os.path.join(EDA_PLOTS_DIR, 'correlation_heatmap.png'))
+    #     plt.close()
 
-        print(f"Τα EDA plots αποθηκεύτηκαν στον φάκελο: {EDA_PLOTS_DIR}")
+    #     print(f"Τα EDA plots αποθηκεύτηκαν στον φάκελο: {EDA_PLOTS_DIR}")
         
 
 
