@@ -433,6 +433,9 @@ class GUI:
             x = DB.Medical(values["Full Name"], values["Username"], values["Password"],
                             values["Role"], values["Telephone"], values["Email"],
                             values["Address"], values["Description"], -1, -1)
+            
+        ## Αν το x.idP είναι -1 τότε ο χρήστης δεν αποθηκεύτηκε στην βάση
+        print(x.idP)
 
         # Optional: Save or process the user object
         messagebox.showinfo("Success", f"New {values['Role']} user created!")
