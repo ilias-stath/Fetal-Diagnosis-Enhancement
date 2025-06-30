@@ -438,8 +438,11 @@ class GUI:
         print(x.idP)
 
         # Optional: Save or process the user object
-        messagebox.showinfo("Success", f"New {values['Role']} user created!")
-        self.show_admin_page()
+        if x.idP == -1:
+            messagebox.showinfo("Error, user was not created")
+        else
+            messagebox.showinfo("Success", f"New {values['Role']} user created!")
+            self.show_admin_page()
 
     def search_results(self):
         self.clear_frame()
