@@ -27,61 +27,13 @@ if not os.path.exists(PREDICTION_PLOTS_DIR):
     os.makedirs(PREDICTION_PLOTS_DIR)
 
 
-def clear_folder(folder_path):
-    """Διαγράφει όλα τα αρχεία και τους υποφακέλους μέσα σε έναν φάκελο."""
-    for filename in os.listdir(folder_path):
-        file_path = os.path.join(folder_path, filename)
-        try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.unlink(file_path)
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)
-        except Exception as e:
-            print(f'Αποτυχία διαγραφής του {file_path}.')
-
-def is_json_format(variable):
-    """
-    Checks if a variable is a string containing valid JSON data.
-    """
-    if not isinstance(variable, str):
-        return False
-    try:
-        json.loads(variable)
-        return True
-    except json.JSONDecodeError:
-        return False
-
-
-def plot_prediction_probabilities(probabilities, model_name):
-    """Δημιουργεί και αποθηκεύει το γράφημα πιθανοτήτων."""
-    health_map = {1: "Normal", 2: "Suspect", 3: "Pathological"}
-    labels = list(health_map.values())
-    probs = list(probabilities)
-    
-    plt.figure(figsize=(10, 6))
-    bars = sns.barplot(x=labels, y=probs, hue=labels, palette="viridis", legend=False)
-    plt.title(f'Πιθανότητες Κλάσης για την Πρόβλεψη\n(Μοντέλο: {model_name[:50]}...)')
-    plt.ylabel('Πιθανότητα')
-    plt.xlabel('Κατηγορία Υγείας')
-    plt.ylim(0, 1)
-
-    for bar in bars.patches:
-        plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02, f'{bar.get_height():.2%}', ha='center', color='black')
-
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"prediction_probabilities_{timestamp}.png"
-    filepath = os.path.join(PREDICTION_PLOTS_DIR, filename)
-    plt.savefig(filepath)
-    plt.close()
-    print(f"Το γράφημα πιθανοτήτων αποθηκεύτηκε στο: {filepath}")
-
 
 class FetalHealthModel:
     """
     Μια κλάση για τη διαχείριση του μοντέλου ταξινόμησης της υγείας του εμβρύου.
     Περιλαμβάνει μεθόδους για εκπαίδευση, πρόβλεψη, αποθήκευση και φόρτωση.
     """
-    def __init__(self,id=None,name=None,parameters=None,idM=None,model_data=None): 
+    def __init__(self,id=None,name=None,parameters=None,idM=None,model_data=None,DB=None): 
         """
         Αρχικοποίηση των αντικειμένων της κλάσης.
         """
@@ -96,6 +48,59 @@ class FetalHealthModel:
         self.model_object = None 
         self.scaler = None
         self.class_averages = None # Νέα μεταβλητή για τους μέσους όρους
+        self.DB = DB
+        print(self.DB)
+
+
+    def clear_folder(self,folder_path):
+        """Διαγράφει όλα τα αρχεία και τους υποφακέλους μέσα σε έναν φάκελο."""
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
+            try:
+                if os.path.isfile(file_path) or os.path.islink(file_path):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+            except Exception as e:
+                print(f'Αποτυχία διαγραφής του {file_path}.')
+
+
+    def is_json_format(self,variable):
+        """
+        Checks if a variable is a string containing valid JSON data.
+        """
+        if not isinstance(variable, str):
+            return False
+        try:
+            json.loads(variable)
+            return True
+        except json.JSONDecodeError:
+            return False
+
+
+
+    def plot_prediction_probabilities(self,probabilities, model_name):
+        """Δημιουργεί και αποθηκεύει το γράφημα πιθανοτήτων."""
+        health_map = {1: "Normal", 2: "Suspect", 3: "Pathological"}
+        labels = list(health_map.values())
+        probs = list(probabilities)
+        
+        plt.figure(figsize=(10, 6))
+        bars = sns.barplot(x=labels, y=probs, hue=labels, palette="viridis", legend=False)
+        plt.title(f'Πιθανότητες Κλάσης για την Πρόβλεψη\n(Μοντέλο: {model_name[:50]}...)')
+        plt.ylabel('Πιθανότητα')
+        plt.xlabel('Κατηγορία Υγείας')
+        plt.ylim(0, 1)
+
+        for bar in bars.patches:
+            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02, f'{bar.get_height():.2%}', ha='center', color='black')
+
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"prediction_probabilities_{timestamp}.png"
+        filepath = os.path.join(PREDICTION_PLOTS_DIR, filename)
+        plt.savefig(filepath)
+        plt.close()
+        print(f"Το γράφημα πιθανοτήτων αποθηκεύτηκε στο: {filepath}")
         
 
     def storeModel(self):
@@ -106,12 +111,12 @@ class FetalHealthModel:
             raise ValueError("Το μοντέλο δεν έχει εκπαιδευτεί ή τα δυαδικά δεδομένα δεν έχουν δημιουργηθεί για αποθήκευση.")
 
         # Μετατροπή της λίστας παραμέτρων σε JSON string για αποθήκευση στη βάση δεδομένων
-        if not is_json_format(self.parameters):
+        if not self.is_json_format(self.parameters):
             parameters_json = json.dumps(self.parameters)
 
         while True:
             # Κλήση της συνάρτησης create_model_in_db για αποθήκευση του μοντέλου
-            self.id = create_model_in_db(self.model_name, parameters_json, self.idM, self._model_binary_data)
+            self.id = self.DB.create_model_in_db(self.model_name, parameters_json, self.idM, self._model_binary_data)
             if self.id != -1:
                 break
 
@@ -214,6 +219,9 @@ class FetalHealthModel:
 
 
     def predict_health_status(self, csv_path: str, idP, pName):
+
+        print("predict")
+        print(self.DB)
         """
         Προβλέπει την κατάσταση υγείας ενός ασθενή χρησιμοποιώντας ένα μοντέλο
         που έχει ήδη φορτωθεί στην κλάση (από BLOB δεδομένα).
@@ -282,18 +290,18 @@ class FetalHealthModel:
                 ### ΝΕΟΣ ΚΩΔΙΚΑΣ: Λήψη πιθανοτήτων ###
         probabilities = self.model_object.predict_proba(scaled_data)[0]
         
-        clear_folder(PREDICTION_PLOTS_DIR)
+        self.clear_folder(PREDICTION_PLOTS_DIR)
 
         ### ΝΕΟΣ ΚΩΔΙΚΑΣ: Κλήση των συναρτήσεων για δημιουργία plots ###
         print("\nΔημιουργία οπτικοποιήσεων πρόβλεψης...")
-        plot_prediction_probabilities(probabilities, self.model_name)
+        self.plot_prediction_probabilities(probabilities, self.model_name)
         # plot_patient_comparison(patient_data_dict, self.class_averages, prediction_class)
         ### ΤΕΛΟΣ ΝΕΟΥ ΚΩΔΙΚΑ ###
         
         health_status_map = {1.0: "Normal", 2.0: "Suspect", 3.0: "Pathological"}
         prediction_string = health_status_map.get(prediction_class, "Unknown")
         
-        result = Results(pName, prediction_string, self.parameters, idP, self.id)
+        result = Results(pName, prediction_string, self.parameters, idP, self.id, self.DB)
         result.storeResult()
 
         return prediction_string
@@ -304,7 +312,7 @@ class FetalHealthModel:
 
 
 class User:
-    def __init__(self, fullName, userName, password, role, telephone, email, address, description):
+    def __init__(self, fullName, userName, password, role, telephone, email, address, description,DB=None):
         self.id = -1
         self.fullName = fullName
         self.userName = userName
@@ -314,11 +322,13 @@ class User:
         self.email = email
         self.address = address
         self.description = description
+        self.DB = DB
 
     def storeUser(self):
         idP = -1
+        print(self.DB)
         while True:
-            self.id, idP, self.password = createUser(self.fullName, self.userName, self.password, self.role, self.telephone, self.email, self.address, self.description)
+            self.id, idP, self.password = self.DB.createUser(self.fullName, self.userName, self.password, self.role, self.telephone, self.email, self.address, self.description)
             if self.id != -1 and idP != -1:
                 break
             return idP
@@ -333,8 +343,8 @@ class User:
 
 
 class Admin(User):
-    def __init__(self, fullName, userName, password, role, telephone, email, address, description, idP, id):
-        super().__init__(fullName, userName, password, role, telephone, email, address, description)
+    def __init__(self, fullName, userName, password, role, telephone, email, address, description, idP, id, DB=None):
+        super().__init__(fullName, userName, password, role, telephone, email, address, description, DB)
         self.idP = idP
         self.id = id
         if self.idP == -1 or self.id == -1:
@@ -347,14 +357,14 @@ class Admin(User):
     #     print("User deleted successfully\n")
 
     def delete(self,idU):
-        deleteUser(idU)
+        self.DB.deleteUser(idU)
         print("User deleted successfully\n")
 
 
     def getUsers(self, fullName, id):
-        rows = getUsers(fullName, id)
+        rows = self.DB.getUsers(fullName, id)
 
-        conn = connect()
+        conn = self.DB.connect()
         cursor = conn.cursor()
 
         if rows == -1:
@@ -383,7 +393,8 @@ class Admin(User):
                 telephone=row[5],
                 email=row[6],
                 address=row[7],
-                description=result[0]
+                description=result[0],
+                DB = self.DB
             )
             user.id = row[0] 
             users.append(user)
@@ -393,7 +404,7 @@ class Admin(User):
         return users
     
     def updateUser(self, userObj, updates: dict):
-        updateUserInfo(userObj, updates)
+        self.DB.updateUserInfo(userObj, updates)
 
 
     
@@ -406,8 +417,8 @@ class Admin(User):
 
 
 class Medical(User):
-    def __init__(self, fullName, userName, password, role, telephone, email, address, description, idP, id):
-        super().__init__(fullName, userName, password, role, telephone, email, address, description)
+    def __init__(self, fullName, userName, password, role, telephone, email, address, description, idP, id, DB=None):
+        super().__init__(fullName, userName, password, role, telephone, email, address, description, DB)
         self.idP = idP
         self.id = id
         if self.idP == -1 or self.id == -1:
@@ -420,7 +431,7 @@ class Medical(User):
 
 
     def getResults(self, pName):
-        raw_results = getResults(pName, self.idP)
+        raw_results = self.DB.getResults(pName, self.idP)
 
         if raw_results == -1:
             return []
@@ -432,7 +443,8 @@ class Medical(User):
                 fetalHealth=row[2],
                 parameters=row[4],
                 idMedical=row[3],
-                idMo=row[6]
+                idMo=row[6],
+                DB = self.DB
             )
             result.id = row[0]
             results_list.append(result)
@@ -442,12 +454,12 @@ class Medical(User):
 
 
     def getModels(self,modelID,name):
-        raw_results = get_models_from_db(modelID,name, self.idP)
+        raw_results = self.DB.get_models_from_db(modelID,name, self.idP)
 
         if raw_results == -1:
             return []
 
-        conn = connect()
+        conn = self.DB.connect()
         cursor = conn.cursor()
 
         results_list = []
@@ -457,7 +469,8 @@ class Medical(User):
                 name = row[1],
                 parameters=row[2],
                 idM=row[3],
-                model_data=row[4]
+                model_data=row[4],
+                DB = self.DB
             )
 
             if model.idM is not None:
@@ -485,18 +498,19 @@ class Medical(User):
 
 
 class Results:
-    def __init__(self,patientName,fetalHealth,parameters,idMedical,idMo):
+    def __init__(self,patientName,fetalHealth,parameters,idMedical,idMo,DB):
         self.id = -1
         self.patientName = patientName
         self.fetalHealth = fetalHealth
         self.parameters = parameters
         self.idMedical = idMedical
         self.idMo = idMo
+        self.DB = DB
 
 
     def storeResult(self):
         while True:
-            self.id = postResults(self.idMedical,self.patientName,self.fetalHealth,self.parameters,self.idMo)
+            self.id = self.DB.postResults(self.idMedical,self.patientName,self.fetalHealth,self.parameters,self.idMo)
             if self.id != -1:
                 break
 
@@ -512,435 +526,442 @@ class Results:
 # Καθολικές Συναρτήσεις Βάσης Δεδομένων
 # -----------------------------------------------------------
 
+class Database:
+    def __init__(self,host,user,password,database):
+        self.id = 1
+        self.host = host
+        self.user = user
+        self.password = password
+        self.database = database
 
-def connect():
-    try:
-        conn = sql.connect(
-            host = "localhost",
-            user = "root",
-            password = "",
-            database = "fedet"
-        )
-        return conn
+    def connect(self):
+        try:
+            conn = sql.connect(
+                host = self.host,
+                user = self.user,
+                password = self.password,
+                database = self.database
+            )
+            return conn
 
-    except Error as e:
-        print("Connection failed:", e)
-        return None
+        except Error as e:
+            print("Connection failed:", e)
+            return None
 
 
-def login(username,password):
-         
-    conn = connect()
-    cursor = conn.cursor()
-    
-    query = 'SELECT * FROM users WHERE username = %s'
-    cursor.execute(query, (username,))
-    result = cursor.fetchone()
+    def login(self,username,password):
+            
+        conn = self.connect()
+        cursor = conn.cursor()
+        
+        query = 'SELECT * FROM users WHERE username = %s'
+        cursor.execute(query, (username,))
+        result = cursor.fetchone()
 
-    if result is None:
-        print(result)
+        if result is None:
+            print(result)
+            cursor.close()
+            conn.close()
+            return 'Wrong'
+        
+        idU = result[0]
+        fN = result[1]
+        passwordDB = result[3].encode('utf-8')
+        role = result[4]
+        telephone = result[5]
+        email = result[6]
+        adress = result[7]
+
+        
+        if bcrypt.checkpw(password.encode('utf-8'), passwordDB):
+            print(result)
+            if role == "admin":
+                query = 'SELECT id,clearance FROM administrators WHERE user_id = %s'
+            else:
+                query = 'SELECT id,specialization FROM medical_personnel WHERE user_id = %s'
+
+            cursor.execute(query, (idU,))
+            result = cursor.fetchone()
+
+            cursor.close()
+            conn.close()
+
+            idP = result[0]
+            description = result[1]
+
+            if role == "admin":
+                user = Admin(fN,username,password,role,telephone,email,adress,description,idP,idU,None)
+            else:
+                user = Medical(fN,username,password,role,telephone,email,adress,description,idP,idU,None)
+
+            return user
+        else:
+            cursor.close()
+            conn.close()
+            return 'Wrong'
+
+
+    def getResults(self,pName,idM):
+            
+        conn = self.connect()
+        cursor = conn.cursor()
+
+        if pName.strip(): 
+            query = 'SELECT * FROM results WHERE Patient_Name = %s AND medical_supervisor = %s'
+            cursor.execute(query, (pName, idM,))
+        else:  
+            query = 'SELECT * FROM results WHERE medical_supervisor = %s'
+            cursor.execute(query, (idM,))
+
+        result = cursor.fetchall()
         cursor.close()
         conn.close()
-        return 'Wrong'
-    
-    idU = result[0]
-    fN = result[1]
-    passwordDB = result[3].encode('utf-8')
-    role = result[4]
-    telephone = result[5]
-    email = result[6]
-    adress = result[7]
 
-    
-    if bcrypt.checkpw(password.encode('utf-8'), passwordDB):
-        print(result)
+        if not result:
+            return -1
+
+        return result
+
+
+    def postResults(self,idP,pName,fH,parameters,idMo): # Αφαίρεση image1, image2 από εδώ, καθώς δεν χρησιμοποιούνται στην INSERT
+            
+        conn = self.connect()
+        cursor = conn.cursor()
+
+        query = """
+            INSERT INTO results (Patient_Name, Fetal_Health, medical_supervisor, parameters, model_id) 
+            VALUES (%s, %s, %s, %s, %s)
+        """
+
+        data = (pName,fH,idP,json.dumps(parameters),idMo)
+        cursor.execute(query, data)
+        conn.commit()
+
+        id = cursor.lastrowid
+
+        cursor.close()
+        conn.close()
+
+        print("Result inserted successfully!")
+
+        return id
+
+
+    def createUser(self,fullName, username, password, role, telephone, email, adress, description):
+        
+        conn = self.connect()
+        cursor = conn.cursor()
+
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+
+        query = """
+            INSERT INTO users (fullName, username, password, role, telephone, email, address) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """
+
+        data = (fullName, username, hashed_password.decode('utf-8'), role, telephone, email, adress)
+        try:
+            cursor.execute(query, data)
+            conn.commit()
+
+        except sql.errors.IntegrityError as err :
+            # Check if the error message specifically mentions a duplicate entry for the 'username' key
+            if "Duplicate entry" in str(err) and "for key 'username'" in str(err):
+                print(f"Error: Username '{username}' already exists. Please choose a different username.")
+                # Optionally, display this message in your Tkinter app using messagebox.showerror
+                # messagebox.showerror("Error", f"Username '{username}' already exists. Please choose a different username.")
+
+                query = "ALTER TABLE users AUTO_INCREMENT = %s"
+                cursor.execute(query,(1,))
+                query = "ALTER TABLE administrators AUTO_INCREMENT = %s"
+                cursor.execute(query,(1,))
+                query = "ALTER TABLE medical_personnel AUTO_INCREMENT = %s"
+                cursor.execute(query,(1,))
+                cursor.close()
+                conn.close()
+                return -1,-1,-1 # Indicate failure due to duplicate username
+
+
+
+        query = 'SELECT id FROM users WHERE username = %s'
+        cursor.execute(query, (username,))
+        result = cursor.fetchone()
+
+        if result is None:
+            cursor.close()
+            conn.close()
+            return -1,-1,-1
+        
+        idU = result[0]
+
+
         if role == "admin":
-            query = 'SELECT id,clearance FROM administrators WHERE user_id = %s'
+            query = """
+                INSERT INTO administrators (user_id, clearance) 
+                VALUES (%s, %s)
+            """
         else:
-            query = 'SELECT id,specialization FROM medical_personnel WHERE user_id = %s'
+            query = """
+                INSERT INTO medical_personnel (user_id, specialization) 
+                VALUES (%s, %s)
+            """
+
+        data = (idU,description)
+        cursor.execute(query, data)
+        conn.commit()
+
+        if role == "admin":
+            query = 'SELECT id FROM administrators WHERE user_id = %s'
+        else:
+            query = 'SELECT id FROM medical_personnel WHERE user_id = %s'
 
         cursor.execute(query, (idU,))
         result = cursor.fetchone()
 
-        cursor.close()
-        conn.close()
+        if result is None:
+            cursor.close()
+            conn.close()
+            return -1,-1,-1
 
         idP = result[0]
-        description = result[1]
 
-        if role == "admin":
-            user = Admin(fN,username,password,role,telephone,email,adress,description,idP,idU)
-        else:
-            user = Medical(fN,username,password,role,telephone,email,adress,description,idP,idU)
-
-        return user
-    else:
         cursor.close()
         conn.close()
-        return 'Wrong'
+
+        print("User inserted successfully.")
+        return idU,idP,hashed_password
 
 
-def getResults(pName,idM):
-         
-    conn = connect()
-    cursor = conn.cursor()
+    def getUsers(self,fullName,id):
+            
+        conn = self.connect()
+        cursor = conn.cursor()
 
-    if pName.strip(): 
-        query = 'SELECT * FROM results WHERE Patient_Name = %s AND medical_supervisor = %s'
-        cursor.execute(query, (pName, idM,))
-    else:  
-        query = 'SELECT * FROM results WHERE medical_supervisor = %s'
-        cursor.execute(query, (idM,))
+        if fullName.strip() and id != -1: 
+            query = 'SELECT * FROM users WHERE fullName = %s AND id = %s'
+            cursor.execute(query, (fullName, id,))
+        elif id != -1:  
+            query = 'SELECT * FROM users WHERE id = %s'
+            cursor.execute(query, (id,))
+        elif fullName.strip():
+            query = 'SELECT * FROM users WHERE fullName = %s'
+            cursor.execute(query, (fullName,))
+        else:
+            query = 'SELECT * FROM users'
+            cursor.execute(query)
 
-    result = cursor.fetchall()
-    cursor.close()
-    conn.close()
+        result = cursor.fetchall()
+        cursor.close()
+        conn.close()
 
-    if not result:
-        return -1
+        if not result:
+            return -1
 
-    return result
-
-
-def postResults(idP,pName,fH,parameters,idMo): # Αφαίρεση image1, image2 από εδώ, καθώς δεν χρησιμοποιούνται στην INSERT
-         
-    conn = connect()
-    cursor = conn.cursor()
-
-    query = """
-        INSERT INTO results (Patient_Name, Fetal_Health, medical_supervisor, parameters, model_id) 
-        VALUES (%s, %s, %s, %s, %s)
-    """
-
-    data = (pName,fH,idP,json.dumps(parameters),idMo)
-    cursor.execute(query, data)
-    conn.commit()
-
-    id = cursor.lastrowid
-
-    cursor.close()
-    conn.close()
-
-    print("Result inserted successfully!")
-
-    return id
+        return result
 
 
-def createUser(fullName, username, password, role, telephone, email, adress, description):
-    
-    conn = connect()
-    cursor = conn.cursor()
+    def is_bcrypt_hash(self,s):
+        """
+        Heuristically checks if a string appears to be a bcrypt hash.
+        This is NOT a foolproof method and should be used with caution.
+        """
+        if not isinstance(s, str):
+            return False
+        
+        # Bcrypt hashes are usually 60 characters long (for a cost of 12)
+        # and start with $2a$, $2b$, or $2y$ followed by the cost factor.
+        # A common length for a bcrypt hash is 60 characters.
+        if len(s) == 60 and s.startswith(("$2a$", "$2b$", "$2y$")):
+            parts = s.split('$')
+            if len(parts) == 4 and parts[0] == '' and parts[1] in ('2a', '2b', '2y'):
+                try:
+                    # Check if the cost factor is a valid integer
+                    cost = int(parts[2])
+                    if 4 <= cost <= 31: # Bcrypt cost factors typically range from 4 to 31
+                        return True
+                except ValueError:
+                    pass
+        return False
 
-    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
 
-    query = """
-        INSERT INTO users (fullName, username, password, role, telephone, email, address) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """
+    def updateUserInfo(self,userObj, updates: dict):
 
-    data = (fullName, username, hashed_password.decode('utf-8'), role, telephone, email, adress)
-    try:
+        print(updates)
+
+        for field, value in updates.items():
+            if field == "password":
+                if not self.is_bcrypt_hash(value): # Only hash if it's not already hashed
+                    hashed_password = bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt())
+                    updates[field] = hashed_password.decode('utf-8')
+                else:
+                    # If it's already a bcrypt hash, assume it's valid and use it as is.
+                    # In a real-world scenario, you might want to log this or have a policy
+                    # that updates always provide plaintext for hashing.
+                    print("HASHED")
+                    pass # The value is already hashed, no need to re-hash.
+
+            if field != "description":
+                if hasattr(userObj, field):
+                    setattr(userObj, field, value)
+
+        if "description" in updates:
+            userObj.description = updates["description"]
+            del updates["description"]
+
+
+        conn = self.connect()
+        cursor = conn.cursor()
+
+
+        if updates:
+            set_clause = ", ".join(f"{field} = %s" for field in updates.keys())
+            values = list(updates.values())
+            values.append(userObj.id) 
+
+            query = f"UPDATE users SET {set_clause} WHERE id = %s"
+
+            cursor.execute(query, values)
+            conn.commit()
+
+        else:
+            print("No fields to update in users.")
+
+
+        if userObj.role == "admin":
+            query = "UPDATE administrators SET clearance = %s WHERE user_id = %s"
+        elif userObj.role == "medical":
+            query = "UPDATE medical_personnel SET specialization = %s WHERE user_id = %s"
+        else:
+            query = None
+
+        if query:
+            cursor.execute(query, (userObj.description, userObj.id))
+            conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        print(f"User (id={userObj.id}) updated successfully.")
+
+        
+    def deleteUser(self,idU):
+        conn = self.connect()
+        cursor = conn.cursor()
+
+
+        query = 'SELECT role FROM users WHERE id = %s'
+        cursor.execute(query, (idU,))
+        result = cursor.fetchone()
+
+        role = result[0]
+
+        query = "DELETE FROM users WHERE id = %s"
+        cursor.execute(query, (idU,))
+        conn.commit()
+
+        query = "ALTER TABLE users AUTO_INCREMENT = %s"
+        cursor.execute(query,(idU-1,))
+        conn.commit()
+
+        if role == "admin":
+            query = "ALTER TABLE administrators AUTO_INCREMENT = %s"
+        else:
+            query = "ALTER TABLE medical_personnel AUTO_INCREMENT = %s"
+
+        conn.commit()
+
+        print("User deleted successfully\n")
+
+
+    def create_model_in_db(self,name, parameters_json_string, maker_id, model_data_blob):
+        """
+        Δημιουργεί μια νέα εγγραφή μοντέλου στη βάση δεδομένων με τα δυαδικά δεδομένα του μοντέλου.
+        """
+        conn = self.connect()
+        cursor = conn.cursor()
+
+        query = "SELECT id FROM medical_personnel WHERE user_id = %s"
+
+        cursor.execute(query, (maker_id,))
+        result = cursor.fetchone()
+
+        maker_id = result[0]
+
+
+        query = """
+            INSERT INTO model (name, parameters, maker, model_data) 
+            VALUES (%s, %s, %s, %s)
+        """
+
+        data = (name, parameters_json_string, maker_id, model_data_blob)
         cursor.execute(query, data)
         conn.commit()
 
-    except sql.errors.IntegrityError as err :
-        # Check if the error message specifically mentions a duplicate entry for the 'username' key
-        if "Duplicate entry" in str(err) and "for key 'username'" in str(err):
-            print(f"Error: Username '{username}' already exists. Please choose a different username.")
-            # Optionally, display this message in your Tkinter app using messagebox.showerror
-            # messagebox.showerror("Error", f"Username '{username}' already exists. Please choose a different username.")
+        model_id = cursor.lastrowid
 
-            query = "ALTER TABLE users AUTO_INCREMENT = %s"
-            cursor.execute(query,(1,))
-            query = "ALTER TABLE administrators AUTO_INCREMENT = %s"
-            cursor.execute(query,(1,))
-            query = "ALTER TABLE medical_personnel AUTO_INCREMENT = %s"
-            cursor.execute(query,(1,))
-            cursor.close()
-            conn.close()
-            return -1,-1,-1 # Indicate failure due to duplicate username
-
-
-
-    query = 'SELECT id FROM users WHERE username = %s'
-    cursor.execute(query, (username,))
-    result = cursor.fetchone()
-
-    if result is None:
         cursor.close()
         conn.close()
-        return -1,-1,-1
-    
-    idU = result[0]
+
+        print(f"Model '{name}' inserted successfully with ID: {model_id}!")
+
+        return model_id
 
 
-    if role == "admin":
-        query = """
-            INSERT INTO administrators (user_id, clearance) 
-            VALUES (%s, %s)
+    def get_models_from_db(self,model_id=None, name=None, maker_id=None):
         """
-    else:
-        query = """
-            INSERT INTO medical_personnel (user_id, specialization) 
-            VALUES (%s, %s)
+        Ανακτά μοντέλα από τη βάση δεδομένων. Μπορεί να φιλτράρει με ID, όνομα ή ID κατασκευαστή.
+        Επιστρέφει μια λίστα από tuples, όπου κάθε tuple περιέχει (id, name, parameters, maker, model_data).
         """
+        conn = self.connect()
+        cursor = conn.cursor()
 
-    data = (idU,description)
-    cursor.execute(query, data)
-    conn.commit()
 
-    if role == "admin":
-        query = 'SELECT id FROM administrators WHERE user_id = %s'
-    else:
-        query = 'SELECT id FROM medical_personnel WHERE user_id = %s'
+        query = "SELECT id, name, parameters, maker, model_data FROM model WHERE 1=1"
+        params = []
 
-    cursor.execute(query, (idU,))
-    result = cursor.fetchone()
+        if model_id is not None and model_id != -1:
+            query += " AND id = %s " 
+            params.append(model_id)
+        if name is not None and name.strip():
+            query += " AND name LIKE %s"
+            params.append(f"%{name}%")
+        if maker_id is not None and maker_id != -1:
+            query += " AND maker = %s"
+            params.append(maker_id)
+        if model_id is None or model_id == -1:
+            query += " OR id = 1"
 
-    if result is None:
+        cursor.execute(query, tuple(params))
+        result = cursor.fetchall()
+        
+
         cursor.close()
         conn.close()
-        return -1,-1,-1
-
-    idP = result[0]
-
-    cursor.close()
-    conn.close()
-
-    print("User inserted successfully.")
-    return idU,idP,hashed_password
 
 
-def getUsers(fullName,id):
-         
-    conn = connect()
-    cursor = conn.cursor()
+        if not result:
+            return []
 
-    if fullName.strip() and id != -1: 
-        query = 'SELECT * FROM users WHERE fullName = %s AND id = %s'
-        cursor.execute(query, (fullName, id,))
-    elif id != -1:  
-        query = 'SELECT * FROM users WHERE id = %s'
-        cursor.execute(query, (id,))
-    elif fullName.strip():
-        query = 'SELECT * FROM users WHERE fullName = %s'
-        cursor.execute(query, (fullName,))
-    else:
-        query = 'SELECT * FROM users'
-        cursor.execute(query)
+        return result
 
-    result = cursor.fetchall()
-    cursor.close()
-    conn.close()
+    def delete_model_from_db(self,model_id):
+        """
+        Διαγράφει μια εγγραφή μοντέλου από τη βάση δεδομένων με βάση το ID.
+        """
+        conn = self.connect()
+        cursor = conn.cursor()
 
-    if not result:
-        return -1
-
-    return result
-
-
-def is_bcrypt_hash(s):
-    """
-    Heuristically checks if a string appears to be a bcrypt hash.
-    This is NOT a foolproof method and should be used with caution.
-    """
-    if not isinstance(s, str):
-        return False
-    
-    # Bcrypt hashes are usually 60 characters long (for a cost of 12)
-    # and start with $2a$, $2b$, or $2y$ followed by the cost factor.
-    # A common length for a bcrypt hash is 60 characters.
-    if len(s) == 60 and s.startswith(("$2a$", "$2b$", "$2y$")):
-        parts = s.split('$')
-        if len(parts) == 4 and parts[0] == '' and parts[1] in ('2a', '2b', '2y'):
-            try:
-                # Check if the cost factor is a valid integer
-                cost = int(parts[2])
-                if 4 <= cost <= 31: # Bcrypt cost factors typically range from 4 to 31
-                    return True
-            except ValueError:
-                pass
-    return False
-
-
-def updateUserInfo(userObj, updates: dict):
-
-    print(updates)
-
-    for field, value in updates.items():
-        if field == "password":
-            if not is_bcrypt_hash(value): # Only hash if it's not already hashed
-                hashed_password = bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt())
-                updates[field] = hashed_password.decode('utf-8')
-            else:
-                # If it's already a bcrypt hash, assume it's valid and use it as is.
-                # In a real-world scenario, you might want to log this or have a policy
-                # that updates always provide plaintext for hashing.
-                print("HASHED")
-                pass # The value is already hashed, no need to re-hash.
-
-        if field != "description":
-            if hasattr(userObj, field):
-                setattr(userObj, field, value)
-
-    if "description" in updates:
-        userObj.description = updates["description"]
-        del updates["description"]
-
-
-    conn = connect()
-    cursor = conn.cursor()
-
-
-    if updates:
-        set_clause = ", ".join(f"{field} = %s" for field in updates.keys())
-        values = list(updates.values())
-        values.append(userObj.id) 
-
-        query = f"UPDATE users SET {set_clause} WHERE id = %s"
-
-        cursor.execute(query, values)
+        query = "DELETE FROM model WHERE id = %s"
+        cursor.execute(query, (model_id,))
         conn.commit()
 
-    else:
-        print("No fields to update in users.")
-
-
-    if userObj.role == "admin":
-        query = "UPDATE administrators SET clearance = %s WHERE user_id = %s"
-    elif userObj.role == "medical":
-        query = "UPDATE medical_personnel SET specialization = %s WHERE user_id = %s"
-    else:
-        query = None
-
-    if query:
-        cursor.execute(query, (userObj.description, userObj.id))
+        query = "ALTER TABLE model AUTO_INCREMENT = %s"
+        cursor.execute(query,(model_id-1,))
         conn.commit()
 
-    cursor.close()
-    conn.close()
-
-    print(f"User (id={userObj.id}) updated successfully.")
-
-    
-def deleteUser(idU):
-    conn = connect()
-    cursor = conn.cursor()
-
-
-    query = 'SELECT role FROM users WHERE id = %s'
-    cursor.execute(query, (idU,))
-    result = cursor.fetchone()
-
-    role = result[0]
-
-    query = "DELETE FROM users WHERE id = %s"
-    cursor.execute(query, (idU,))
-    conn.commit()
-
-    query = "ALTER TABLE users AUTO_INCREMENT = %s"
-    cursor.execute(query,(idU-1,))
-    conn.commit()
-
-    if role == "admin":
-        query = "ALTER TABLE administrators AUTO_INCREMENT = %s"
-    else:
-        query = "ALTER TABLE medical_personnel AUTO_INCREMENT = %s"
-
-    conn.commit()
-
-    print("User deleted successfully\n")
-
-
-def create_model_in_db(name, parameters_json_string, maker_id, model_data_blob):
-    """
-    Δημιουργεί μια νέα εγγραφή μοντέλου στη βάση δεδομένων με τα δυαδικά δεδομένα του μοντέλου.
-    """
-    conn = connect()
-    cursor = conn.cursor()
-
-    query = "SELECT id FROM medical_personnel WHERE user_id = %s"
-
-    cursor.execute(query, (maker_id,))
-    result = cursor.fetchone()
-
-    maker_id = result[0]
-
-
-    query = """
-        INSERT INTO model (name, parameters, maker, model_data) 
-        VALUES (%s, %s, %s, %s)
-    """
-
-    data = (name, parameters_json_string, maker_id, model_data_blob)
-    cursor.execute(query, data)
-    conn.commit()
-
-    model_id = cursor.lastrowid
-
-    cursor.close()
-    conn.close()
-
-    print(f"Model '{name}' inserted successfully with ID: {model_id}!")
-
-    return model_id
-
-
-def get_models_from_db(model_id=None, name=None, maker_id=None):
-    """
-    Ανακτά μοντέλα από τη βάση δεδομένων. Μπορεί να φιλτράρει με ID, όνομα ή ID κατασκευαστή.
-    Επιστρέφει μια λίστα από tuples, όπου κάθε tuple περιέχει (id, name, parameters, maker, model_data).
-    """
-    conn = connect()
-    cursor = conn.cursor()
-
-
-    query = "SELECT id, name, parameters, maker, model_data FROM model WHERE 1=1"
-    params = []
-
-    if model_id is not None and model_id != -1:
-        query += " AND id = %s " 
-        params.append(model_id)
-    if name is not None and name.strip():
-        query += " AND name LIKE %s"
-        params.append(f"%{name}%")
-    if maker_id is not None and maker_id != -1:
-        query += " AND maker = %s"
-        params.append(maker_id)
-    if model_id is None or model_id == -1:
-        query += " OR id = 1"
-
-    cursor.execute(query, tuple(params))
-    result = cursor.fetchall()
-    
-
-    cursor.close()
-    conn.close()
-
-
-    if not result:
-        return []
-
-    return result
-
-def delete_model_from_db(model_id):
-    """
-    Διαγράφει μια εγγραφή μοντέλου από τη βάση δεδομένων με βάση το ID.
-    """
-    conn = connect()
-    cursor = conn.cursor()
-
-    query = "DELETE FROM model WHERE id = %s"
-    cursor.execute(query, (model_id,))
-    conn.commit()
-
-    query = "ALTER TABLE model AUTO_INCREMENT = %s"
-    cursor.execute(query,(model_id-1,))
-    conn.commit()
-
-    cursor.close()
-    conn.close()
-    print(f"Model ID: {model_id} deleted from database.")
+        cursor.close()
+        conn.close()
+        print(f"Model ID: {model_id} deleted from database.")
 
 
 
