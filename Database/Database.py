@@ -1,917 +1,696 @@
-import mysql.connector as sql
-from mysql.connector import Error
-import bcrypt
-import json
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import confusion_matrix
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import accuracy_score
-import uuid
-import os 
-import shutil
-import datetime
-import pickle
+import tkinter as tk
+from tkinter import messagebox, filedialog, ttk
+import Database as DB
+from PIL import Image, ImageTk
+import os
+import glob
 
-# Σταθερές για εύκολη διαχείριση
+class GUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Login Page")
+        self.root.attributes('-fullscreen', True)
 
-DATASET_CSV = 'fetal_health.csv'
-PREDICTION_PLOTS_DIR = 'prediction_plots'
-
-# Δημιουργία φακέλων αν δεν υπάρχουν
-
-if not os.path.exists(PREDICTION_PLOTS_DIR): 
-    os.makedirs(PREDICTION_PLOTS_DIR)
+        self.bg_color = "#1e3f66"
+        self.root.configure(bg=self.bg_color)
+        self.current_page = "login"
+        self.csv_path = None
 
 
-def clear_folder(folder_path):
-    """Διαγράφει όλα τα αρχεία και τους υποφακέλους μέσα σε έναν φάκελο."""
-    for filename in os.listdir(folder_path):
-        file_path = os.path.join(folder_path, filename)
+        self.setup_style()
+
+        self.main_frame = tk.Frame(self.root, bg=self.bg_color)
+        self.main_frame.pack(expand=True, fill='both')
+
+        self.create_widgets()
+
+    def setup_style(self):
+        style = ttk.Style()
+        style.theme_use("clam")
+        style.configure("TButton", font=("Segoe UI", 12), padding=10)
+        style.configure("Exit.TButton", font=("Segoe UI", 10), padding=6)
+        style.configure("Title.TLabel", font=("Arial", 48, "bold"), background="white", foreground=self.bg_color)
+        style.configure("Header.TLabel", font=("Arial", 36), background="#4a4a4a", foreground="white")
+        style.configure("UserHeader.TLabel", font=("Arial", 36), background="#2d6a4f", foreground="white")
+
+    def clear_frame(self):
+        for widget in self.main_frame.winfo_children():
+            widget.destroy()
+        self.main_frame.configure(bg=self.bg_color)
+
+    def create_widgets(self):
+        self.clear_frame()
+        self.current_page = "login"
+    
+        center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        center_frame.place(relx=0.5, rely=0.5, anchor='center')
+    
+        # Load and display logo image (with transparent background support)
         try:
-            if os.path.isfile(file_path) or os.path.islink(file_path):
-                os.unlink(file_path)
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)
+            logo_image = Image.open("logo.png").convert("RGBA")  # Transparent image
+            logo_image = logo_image.resize((280, 280), Image.Resampling.LANCZOS)
+            self.logo_photo = ImageTk.PhotoImage(logo_image)  # Keep a reference! 
+    
+            tk.Label(center_frame, image=self.logo_photo, bg="white").pack(pady=(0, 30))
         except Exception as e:
-            print(f'Αποτυχία διαγραφής του {file_path}.')
-
-def is_json_format(variable):
-    """
-    Checks if a variable is a string containing valid JSON data.
-    """
-    if not isinstance(variable, str):
-        return False
-    try:
-        json.loads(variable)
-        return True
-    except json.JSONDecodeError:
-        return False
-
-
-def plot_prediction_probabilities(probabilities, model_name):
-    """Δημιουργεί και αποθηκεύει το γράφημα πιθανοτήτων."""
-    health_map = {1: "Normal", 2: "Suspect", 3: "Pathological"}
-    labels = list(health_map.values())
-    probs = list(probabilities)
+            print(f"Error loading logo: {e}")
+            tk.Label(center_frame, text="FEDE", font=("Arial", 48, "bold"),
+                     bg="white", fg=self.bg_color, padx=20, pady=10).pack(pady=(0, 30))
     
-    plt.figure(figsize=(10, 6))
-    bars = sns.barplot(x=labels, y=probs, hue=labels, palette="viridis", legend=False)
-    plt.title(f'Πιθανότητες Κλάσης για την Πρόβλεψη\n(Μοντέλο: {model_name[:50]}...)')
-    plt.ylabel('Πιθανότητα')
-    plt.xlabel('Κατηγορία Υγείας')
-    plt.ylim(0, 1)
-
-    for bar in bars.patches:
-        plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02, f'{bar.get_height():.2%}', ha='center', color='black')
-
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"prediction_probabilities_{timestamp}.png"
-    filepath = os.path.join(PREDICTION_PLOTS_DIR, filename)
-    plt.savefig(filepath)
-    plt.close()
-    print(f"Το γράφημα πιθανοτήτων αποθηκεύτηκε στο: {filepath}")
-
-
-class FetalHealthModel:
-    """
-    Μια κλάση για τη διαχείριση του μοντέλου ταξινόμησης της υγείας του εμβρύου.
-    Περιλαμβάνει μεθόδους για εκπαίδευση, πρόβλεψη, αποθήκευση και φόρτωση.
-    """
-    def __init__(self,id=None,name=None,parameters=None,idM=None,model_data=None): 
-        """
-        Αρχικοποίηση των αντικειμένων της κλάσης.
-        """
-        self.id = id
-        self.model_name = name
-        self.parameters = parameters # Λίστα με τα ονόματα των παραμέτρων (features)
-        self.idM = idM # ID του χρήστη (maker) που εκπαίδευσε το μοντέλο
-        # Δυαδικά δεδομένα του μοντέλου για αποθήκευση/φόρτωση από τη βάση δεδομένων
-        self._model_binary_data = model_data 
-        
-        # Το εκπαιδευμένο μοντέλο και ο scaler
-        self.model_object = None 
-        self.scaler = None
-        self.class_averages = None # Νέα μεταβλητή για τους μέσους όρους
-        
-
-    def storeModel(self):
-        """
-        Αποθηκεύει το εκπαιδευμένο μοντέλο (και scaler) ως δυαδικά δεδομένα στη βάση δεδομένων.
-        """
-        if self.model_object is None or self.scaler is None or self._model_binary_data is None:
-            raise ValueError("Το μοντέλο δεν έχει εκπαιδευτεί ή τα δυαδικά δεδομένα δεν έχουν δημιουργηθεί για αποθήκευση.")
-
-        # Μετατροπή της λίστας παραμέτρων σε JSON string για αποθήκευση στη βάση δεδομένων
-        if not is_json_format(self.parameters):
-            parameters_json = json.dumps(self.parameters)
-
-        while True:
-            # Κλήση της συνάρτησης create_model_in_db για αποθήκευση του μοντέλου
-            self.id = create_model_in_db(self.model_name, parameters_json, self.idM, self._model_binary_data)
-            if self.id != -1:
-                break
-
-    def train_new_model(self, csv_path: str):
-        """
-        Μέθοδος 2: Δημιουργία και εκπαίδευση ενός νέου μοντέλου.
-        Διαβάζει δεδομένα από ένα CSV, τα επεξεργάζεται, εκπαιδεύει το μοντέλο
-        και αποθηκεύει τα εκπαιδευμένα αντικείμενα μέσα στην κλάση.
-        
-        Args:
-            csv_path (str): Η διαδρομή προς το αρχείο fetal_health.csv.
-        """
-        print(f"--- Ξεκινά η εκπαίδευση του μοντέλου από το αρχείο: {csv_path} ---")
-        
-        data = pd.read_csv(csv_path)
-        data = data.dropna()
-
-        ### ΑΛΛΑΓΗ: Υπολογισμός μέσων όρων ###
-        print("Υπολογισμός μέσων όρων ανά κλάση...")
-        self.class_averages = data.groupby('fetal_health').mean()
-        
-        X = data.drop('fetal_health', axis=1)
-        y = data['fetal_health']
-        self.parameters = X.columns.tolist() 
-
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        
-        self.scaler = StandardScaler()
-        X_train_scaled = self.scaler.fit_transform(X_train)
-        X_test_scaled = self.scaler.transform(X_test)
-        
-        self.model_object = RandomForestClassifier(n_estimators=100, random_state=42)
-        print("Εκπαιδεύεται το Random Forest Classifier...")
-        self.model_object.fit(X_train_scaled, y_train)
-        
-        # Συσκευασία μοντέλου και scaler σε δυαδικά δεδομένα
-        model_pack = {
-            'model_object': self.model_object,
-            'scaler': self.scaler,
-            'parameters': self.parameters,
-            'class_averages': self.class_averages 
-        }
-        self._model_binary_data = pickle.dumps(model_pack) # Μετατροπή σε bytes
-
-        # Δημιουργία μοναδικού ονόματος μοντέλου και αξιολόγηση
-        self.model_name = "Fetal Health Random Forest Classifier-" + str(uuid.uuid4()) + "-" + datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        predictions = self.model_object.predict(X_test_scaled)
-        accuracy = accuracy_score(y_test, predictions)
-        
-        # Δημιουργία φακέλου για τα plots με ένα μοναδικό όνομα βασισμένο στο UUID
-        # Το UUID είναι μέρος του self.model_name
-        # Η λογική για την ανάκτηση αυτού του μέρους για τη διαγραφή του φακέλου βρίσκεται στη delete_model.
-        uuid_part_for_folder = self.model_name[self.model_name.rfind("-") + 3:].split("-")[0]
-        model_plots_dir_path = os.path.join("model_plots",uuid_part_for_folder)
-        
-        if not os.path.exists(model_plots_dir_path):
-            os.makedirs(model_plots_dir_path)
-            
-        print(f"\nΑποθήκευση οπτικοποιήσεων αξιολόγησης στον φάκελο: {model_plots_dir_path}")
-        
-        # Plot: Πίνακας Σύγχυσης (Confusion Matrix)
-        cm = confusion_matrix(y_test, predictions)
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                    xticklabels=['Normal', 'Suspect', 'Pathological'], 
-                    yticklabels=['Normal', 'Suspect', 'Pathological'])
-        plt.title('Πίνακας Σύγχυσης (Confusion Matrix)')
-        plt.ylabel('Πραγματική Κλάση (Actual)')
-        plt.xlabel('Προβλεπόμενη Κλάση (Predicted)')
-        confusion_matrix_path = os.path.join(model_plots_dir_path, 'confusion_matrix.png')
-        plt.savefig(confusion_matrix_path)
-        plt.close()
-
-        # Plot: Σημαντικότητα Παραμέτρων (Feature Importance)
-        importances = self.model_object.feature_importances_
-        feature_names = self.parameters
-        feature_importance_df = pd.DataFrame({'feature': feature_names, 'importance': importances})
-        feature_importance_df = feature_importance_df.sort_values(by='importance', ascending=False)
-        plt.figure(figsize=(12, 10))
-        sns.barplot(x='importance', y='feature', data=feature_importance_df)
-        plt.title('Σημαντικότητα Παραμέτρων (Feature Importance)')
-        plt.xlabel('Βαθμός Σημαντικότητας')
-        plt.ylabel('Παράμετρος')
-        plt.tight_layout()
-        feature_importance_path = os.path.join(model_plots_dir_path, 'feature_importance.png')
-        plt.savefig(feature_importance_path)
-        plt.close()
-        
-        print("--- Η εκπαίδευση ολοκληρώθηκε! ---")
-        print(f"Model Name: {self.model_name}") 
-        print(f"Ακρίβεια στο σύνολο δοκιμής: {accuracy:.4f}")
-
-        # Αποθήκευση του μοντέλου στη βάση δεδομένων
-        self.storeModel()
-        print(f"Model ID (από τη βάση δεδομένων): {self.id}") 
-
-
-    def predict_health_status(self, csv_path: str, idP, pName):
-        """
-        Προβλέπει την κατάσταση υγείας ενός ασθενή χρησιμοποιώντας ένα μοντέλο
-        που έχει ήδη φορτωθεί στην κλάση (από BLOB δεδομένα).
-        Διαβάζει τα δεδομένα του ασθενή από ένα CSV αρχείο.
-
-        Args:
-            csv_path (str): Η διαδρομή προς το CSV αρχείο που περιέχει τα δεδομένα
-                            ενός και μόνο ασθενή για πρόβλεψη.
-
-        Returns:
-            int: Η πρόβλεψη (1: Normal, 2: Suspect, 3: Pathological).
-        """
-        # Υποθέτουμε ότι το self.id έχει ήδη ρυθμιστεί με το ID του φορτωμένου μοντέλου
-        print(f"Φόρτωση μοντέλου (ID: {self.id}) και δεδομένων ασθενή από: {csv_path}")
-
-        # 1. Αποκωδικοποίηση του μοντέλου και του scaler από τα binary δεδομένα
-        if self._model_binary_data is None:
-            raise ValueError("Το δυαδικό μοντέλο (_model_binary_data) δεν είναι διαθέσιμο. Βεβαιωθείτε ότι έχει φορτωθεί από τη βάση δεδομένων πριν την κλήση αυτής της συνάρτησης.")
-        
-        try:
-            # Χρησιμοποιούμε το pickle.loads για να αποκωδικοποιήσουμε τα binary δεδομένα
-            model_pack = pickle.loads(self._model_binary_data)
-            self.model_object = model_pack['model_object']
-            self.scaler = model_pack['scaler']
-            self.parameters = model_pack['parameters']
-            self.class_averages = model_pack.get('class_averages') 
-            print("Μοντέλο και εξαρτήσεις αποκωδικοποιήθηκαν επιτυχώς.")
-        except Exception as e:
-            raise ValueError(f"Σφάλμα κατά την αποκωδικοποίηση του δυαδικού μοντέλου: {e}. Βεβαιωθείτε ότι τα δεδομένα είναι έγκυρα pickled δεδομένα.")
-
-        # Έλεγχος ότι τα αντικείμενα φορτώθηκαν επιτυχώς
-        if self.model_object is None or self.scaler is None or self.parameters is None:
-            raise ValueError("Το μοντέλο ή ο scaler ή οι παράμετροι δεν φορτώθηκαν επιτυχώς από τα δυαδικά δεδομένα.")
-
-        # 2. Διαβάζουμε το CSV αρχείο με την τυπική δομή
-        try:
-            # Το pd.read_csv() από προεπιλογή θα χρησιμοποιήσει την πρώτη γραμμή ως κεφαλίδες,
-            # που είναι ακριβώς αυτό που θέλουμε για το patient_data.csv
-            df = pd.read_csv(csv_path)
-
-            # Προαιρετικός έλεγχος: Διασφαλίζουμε ότι το αρχείο έχει μόνο μία γραμμή δεδομένων
-            if len(df) != 1:
-                raise ValueError(f"Το αρχείο CSV '{csv_path}' πρέπει να περιέχει δεδομένα για έναν μόνο ασθενή (1 γραμμή δεδομένων), αλλά βρέθηκαν {len(df)} γραμμές.")
-
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Το CSV αρχείο δεν βρέθηκε στη διαδρομή: {csv_path}")
-        except Exception as e:
-            raise Exception(f"Σφάλμα κατά την ανάγνωση ή επεξεργασία του CSV αρχείου: {e}")
-
-        # patient_data_dict = df.iloc[0].to_dict()
-
-        # 3. Διασφάλιση ότι οι στήλες του DataFrame είναι στη σωστή σειρά
-        if not all(col in df.columns for col in self.parameters):
-            missing_cols = [col for col in self.parameters if col not in df.columns]
-            raise ValueError(f"Το CSV αρχείο λείπει από απαραίτητες παραμέτρους για το μοντέλο: {missing_cols}")
-        
-        # Χρησιμοποιούμε το df απευθείας, αλλά το βάζουμε στη σωστή σειρά
-        df_ordered = df[self.parameters]
-        
-        # 4. Εφαρμογή του ΙΔΙΟΥ scaler που χρησιμοποιήθηκε στην εκπαίδευση
-        scaled_data = self.scaler.transform(df_ordered)
-        
-        # 5. Πρόβλεψη
-        prediction_class = self.model_object.predict(scaled_data)[0]
-
-                ### ΝΕΟΣ ΚΩΔΙΚΑΣ: Λήψη πιθανοτήτων ###
-        probabilities = self.model_object.predict_proba(scaled_data)[0]
-        
-        clear_folder(PREDICTION_PLOTS_DIR)
-
-        ### ΝΕΟΣ ΚΩΔΙΚΑΣ: Κλήση των συναρτήσεων για δημιουργία plots ###
-        print("\nΔημιουργία οπτικοποιήσεων πρόβλεψης...")
-        plot_prediction_probabilities(probabilities, self.model_name)
-        # plot_patient_comparison(patient_data_dict, self.class_averages, prediction_class)
-        ### ΤΕΛΟΣ ΝΕΟΥ ΚΩΔΙΚΑ ###
-        
-        health_status_map = {1.0: "Normal", 2.0: "Suspect", 3.0: "Pathological"}
-        prediction_string = health_status_map.get(prediction_class, "Unknown")
-        
-        result = Results(pName, prediction_string, self.parameters, idP, self.id)
-        result.storeResult()
-
-        return prediction_string
-
-
-        
-
-
-
-class User:
-    def __init__(self, fullName, userName, password, role, telephone, email, address, description):
-        self.id = -1
-        self.fullName = fullName
-        self.userName = userName
-        self.password = password
-        self.role = role
-        self.telephone = telephone
-        self.email = email
-        self.address = address
-        self.description = description
-
-    def storeUser(self):
-        idP = -1
-        while True:
-            self.id, idP, self.password = createUser(self.fullName, self.userName, self.password, self.role, self.telephone, self.email, self.address, self.description)
-            if self.id != -1 and idP != -1:
-                break
-        return idP
+        # Login form
+        tk.Label(center_frame, text="Username", bg=self.bg_color, fg="white").pack()
+        self.username_entry = tk.Entry(center_frame, width=30)
+        self.username_entry.pack(pady=(0, 10))
     
-    def print(self):
-        print(f"idU -> {self.id} , fN -> {self.fullName} , uN -> {self.userName} , role -> {self.role}\n")
-
+        tk.Label(center_frame, text="Password", bg=self.bg_color, fg="white").pack()
+        self.password_entry = tk.Entry(center_frame, show="*", width=30)
+        self.password_entry.pack(pady=(0, 10))
     
-
-
-
-
-class Admin(User):
-    def __init__(self, fullName, userName, password, role, telephone, email, address, description, idP, id):
-        super().__init__(fullName, userName, password, role, telephone, email, address, description)
-        self.idP = idP
-        self.id = id
-        if self.idP == -1 or self.id == -1:
-            self.idP = super().storeUser()
-
-
+        tk.Button(center_frame, text="Login", command=self.login, width=20, height=1).pack(pady=10)
+        tk.Button(center_frame, text="Exit", command=self.root.quit, width=20, height=1).pack(pady=(5, 0))
     
-    # def __del__(self):
-    #     deleteUser(self.id,self.idP,self.role)
-    #     print("User deleted successfully\n")
-
-    def delete(self,idU):
-        deleteUser(idU)
-        print("User deleted successfully\n")
+        self.root.bind("<Escape>", lambda event: self.root.attributes('-fullscreen', False))
 
 
-    def getUsers(self, fullName, id):
-        rows = getUsers(fullName, id)
+    def login(self):
+        user = self.username_entry.get()
+        pw = self.password_entry.get()
 
-        conn = connect()
-        cursor = conn.cursor()
+        if user == "1":
+            user = "ilias_stath"
+            pw = "123456789"
+        elif user == "2":
+            user = "george_ktist"
+            pw = "123456789"
 
-        if rows == -1:
-            return []
+        self.User = DB.login(user, pw)
+        if type(self.User) != str:
+            if self.User.role == "admin":
+                self.show_admin_page()
+            elif self.User.role == "medical":
+                self.show_user_page()
+        else:
+            messagebox.showerror("Login Failed", "Invalid username or password.")
 
-        users = []
-        for row in rows:
+    def show_admin_page(self):
+        self.clear_frame()
+        center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        center_frame.place(relx=0.5, rely=0.5, anchor='center')
 
-            if row[4] == "admin":
-                query = 'SELECT clearance FROM administrators WHERE user_id = %s'
-            else:
-                query = 'SELECT specialization FROM medical_personnel WHERE user_id = %s'
+        tk.Label(center_frame, text="Welcome, "+self.User.fullName, font=("Arial", 36, "bold"),
+                 bg="white", fg=self.bg_color, padx=30, pady=20, bd=2, relief="groove").pack(pady=(0, 30))
+        
 
-            cursor.execute(query, (row[0],))
-            result = cursor.fetchone()
+        ttk.Button(center_frame, text="Look up user data", width=30, command=self.lookup_user_data).pack(pady=10)
+        ttk.Button(center_frame, text="Create New User",width=30, command=self.open_create_user_form).pack(pady=10)
+        ttk.Button(center_frame, text="Exit", style="Exit.TButton", command=self.confirm_exit).pack(pady=30)
 
-            if result is None:
-                result[0] = ""
+    def show_user_page(self):
+        self.clear_frame()
+        center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        center_frame.place(relx=0.5, rely=0.5, anchor='center')
 
+        tk.Label(center_frame, text="Welcome, "+self.User.fullName, font=("Arial", 36, "bold"),
+                 bg="white", fg=self.bg_color, padx=30, pady=20, bd=2, relief="groove").pack(pady=(0, 30))
 
-            user = User(
-                fullName=row[1],
-                userName=row[2],
-                password=row[3],
-                role=row[4],
-                telephone=row[5],
-                email=row[6],
-                address=row[7],
-                description=result[0]
-            )
-            user.id = row[0] 
-            users.append(user)
+        ttk.Button(center_frame, text="Insert values for estimation", width=40, command=self.insert_values).pack(pady=10)
+        ttk.Button(center_frame, text="Search previous results", width=40, command=self.search_results).pack(pady=10)
+        ttk.Button(center_frame, text="Train model with new parameters", width=40, command=self.train_model_screen).pack(pady=10)
+        ttk.Button(center_frame, text="Exit", style="Exit.TButton", command=self.confirm_exit).pack(pady=30)
 
-        cursor.close()
-        conn.close()
-        return users
-    
-    def updateUser(self, userObj, updates: dict):
-        updateUserInfo(userObj, updates)
-
-
-    
-    def printy(self):
-        print(f"idP -> {self.idP}")
-        super().print( )
-
-
-
-
-
-class Medical(User):
-    def __init__(self, fullName, userName, password, role, telephone, email, address, description, idP, id):
-        super().__init__(fullName, userName, password, role, telephone, email, address, description)
-        self.idP = idP
-        self.id = id
-        if self.idP == -1 or self.id == -1:
-            self.idP = super().storeUser()
-
-
-    # def delete(self):
-    #     deleteUser(self.id,self.idP,self.role)
-    #     print("User deleted successfully\n")
-
-
-    def getResults(self, pName):
-        raw_results = getResults(pName, self.idP)
-
-        if raw_results == -1:
-            return []
-
-        results_list = []
-        for row in raw_results:
-            result = Results(
-                patientName=row[1],
-                fetalHealth=row[2],
-                parameters=row[4],
-                idMedical=row[3],
-                idMo=row[6]
-            )
-            result.id = row[0]
-            results_list.append(result)
-
-        return results_list
-    
-
-
-    def getModels(self,modelID,name):
-        raw_results = get_models_from_db(modelID,name, self.idP)
-
-        if raw_results == -1:
-            return []
-
-        conn = connect()
-        cursor = conn.cursor()
-
-        results_list = []
-        for row in raw_results:
-            model = FetalHealthModel(
-                id = row[0],
-                name = row[1],
-                parameters=row[2],
-                idM=row[3],
-                model_data=row[4]
-            )
-
-            if model.idM is not None:
-                query = "SELECT user_id FROM medical_personnel WHERE id = %s"
-                cursor.execute(query, (model.idM,))
-                result = cursor.fetchone()
-                model.idM = result[0]
-
-            results_list.append(model)
-
-        cursor.close()
-        conn.close()
-
-
-        return results_list
-
-
-    def printy(self):
-        print(f"idP -> {self.idP}")
-        super().print( )
-
-
-
-
-
-
-class Results:
-    def __init__(self,patientName,fetalHealth,parameters,idMedical,idMo):
-        self.id = -1
-        self.patientName = patientName
-        self.fetalHealth = fetalHealth
-        self.parameters = parameters
-        self.idMedical = idMedical
-        self.idMo = idMo
-
-
-    def storeResult(self):
-        while True:
-            self.id = postResults(self.idMedical,self.patientName,self.fetalHealth,self.parameters,self.idMo)
-            if self.id != -1:
-                break
-
-    def __str__(self):
-        return f"Result(id={self.id}, patientName='{self.patientName}', fetalHealth={self.fetalHealth}, parameters='{self.parameters}', idMedical={self.idMedical})"
-
-    def __repr__(self):
-        return self.__str__()
-
-
-
-# -----------------------------------------------------------
-# Καθολικές Συναρτήσεις Βάσης Δεδομένων
-# -----------------------------------------------------------
-
-def connect():
-    try:
-        conn = sql.connect(
-            host = "localhost",
-            user = "root",
-            password = "",
-            database = "fedet"
+    def insert_values(self):
+        self.show_csv_screen(
+            title="Insert CSV for Estimation",
+            run_command=self.run_model,
+            back_command=self.show_user_page,
+            training=False
         )
-        return conn
 
-    except Error as e:
-        print("Connection failed:", e)
-        return None
+    def train_model_screen(self):
+        self.show_csv_screen(
+            title="Train Model with CSV",
+            run_command=self.train_model,
+            back_command=self.show_user_page
+        )
 
+    def show_csv_screen(self, title, run_command, back_command,training=True):
+        self.clear_frame()
+        self.csv_path = None
 
-def login(username,password):
-         
-    conn = connect()
-    cursor = conn.cursor()
-    
-    query = 'SELECT * FROM users WHERE username = %s'
-    cursor.execute(query, (username,))
-    result = cursor.fetchone()
+        center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        center_frame.place(relx=0.5, rely=0.5, anchor='center')
 
-    if result is None:
-        print(result)
-        return 'Wrong'
-    
-    idU = result[0]
-    fN = result[1]
-    passwordDB = result[3].encode('utf-8')
-    role = result[4]
-    telephone = result[5]
-    email = result[6]
-    adress = result[7]
+        tk.Label(center_frame, text=title, font=("Arial", 30, "bold"),
+                 bg="white", fg=self.bg_color, padx=30, pady=20, bd=2, relief="groove").pack(pady=(0, 20))
 
-    
-    if bcrypt.checkpw(password.encode('utf-8'), passwordDB):
-        print(result)
-        if role == "admin":
-            query = 'SELECT id,clearance FROM administrators WHERE user_id = %s'
-        else:
-            query = 'SELECT id,specialization FROM medical_personnel WHERE user_id = %s'
+        ttk.Button(center_frame, text="Browse CSV File", width=30, command=lambda:self.browse_csv(training)).pack(pady=10)
 
-        cursor.execute(query, (idU,))
-        result = cursor.fetchone()
+        self.csv_label = tk.Label(center_frame, text="", bg=self.bg_color, fg="white",
+                                  font=("Segoe UI", 12), wraplength=800)
+        self.csv_label.pack(pady=(20, 10))
 
-        cursor.close()
-        conn.close()
+        if training:
+            self.run_model_button = ttk.Button(center_frame, text="Run", width=30, command=run_command)
+            self.run_model_button_is_visible = False
 
-        idP = result[0]
-        description = result[1]
+        self.back_button = ttk.Button(center_frame, text="Back", style="Exit.TButton", command=back_command)
+        self.back_button.pack(pady=10)
 
-        if role == "admin":
-            user = Admin(fN,username,password,role,telephone,email,adress,description,idP,idU)
-        else:
-            user = Medical(fN,username,password,role,telephone,email,adress,description,idP,idU)
+        self.center_csv_frame = center_frame  # store reference
 
-        return user
-    else:
-        cursor.close()
-        conn.close()
-        return 'Wrong'
-
-
-def getResults(pName,idM):
-         
-    conn = connect()
-    cursor = conn.cursor()
-
-    if pName.strip(): 
-        query = 'SELECT * FROM results WHERE Patient_Name = %s AND medical_supervisor = %s'
-        cursor.execute(query, (pName, idM,))
-    else:  
-        query = 'SELECT * FROM results WHERE medical_supervisor = %s'
-        cursor.execute(query, (idM,))
-
-    result = cursor.fetchall()
-    cursor.close()
-    conn.close()
-
-    if not result:
-        return -1
-
-    return result
-
-
-def postResults(idP,pName,fH,parameters,idMo): # Αφαίρεση image1, image2 από εδώ, καθώς δεν χρησιμοποιούνται στην INSERT
-         
-    conn = connect()
-    cursor = conn.cursor()
-
-    query = """
-        INSERT INTO results (Patient_Name, Fetal_Health, medical_supervisor, parameters, model_id) 
-        VALUES (%s, %s, %s, %s, %s)
-    """
-
-    data = (pName,fH,idP,json.dumps(parameters),idMo)
-    cursor.execute(query, data)
-    conn.commit()
-
-    id = cursor.lastrowid
-
-    cursor.close()
-    conn.close()
-
-    print("Result inserted successfully!")
-
-    return id
-
-
-def createUser(fullName, username, password, role, telephone, email, adress, description):
-    
-    conn = connect()
-    cursor = conn.cursor()
-
-    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-
-    query = """
-        INSERT INTO users (fullName, username, password, role, telephone, email, address) 
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """
-
-    data = (fullName, username, hashed_password.decode('utf-8'), role, telephone, email, adress)
-    cursor.execute(query, data)
-    conn.commit()
-
-
-    query = 'SELECT id FROM users WHERE username = %s'
-    cursor.execute(query, (username,))
-    result = cursor.fetchone()
-
-    if result is None:
-        return -1
-    
-    idU = result[0]
-
-
-    if role == "admin":
-        query = """
-            INSERT INTO administrators (user_id, clearance) 
-            VALUES (%s, %s)
-        """
-    else:
-        query = """
-            INSERT INTO medical_personnel (user_id, specialization) 
-            VALUES (%s, %s)
-        """
-
-    data = (idU,description)
-    cursor.execute(query, data)
-    conn.commit()
-
-    if role == "admin":
-        query = 'SELECT id FROM administrators WHERE user_id = %s'
-    else:
-        query = 'SELECT id FROM medical_personnel WHERE user_id = %s'
-
-    cursor.execute(query, (idU,))
-    result = cursor.fetchone()
-
-    if result is None:
-        return -1
-
-    idP = result[0]
-
-    cursor.close()
-    conn.close()
-
-    print("User inserted successfully.")
-    return idU,idP,hashed_password
-
-
-def getUsers(fullName,id):
-         
-    conn = connect()
-    cursor = conn.cursor()
-
-    if fullName.strip() and id != -1: 
-        query = 'SELECT * FROM users WHERE fullName = %s AND id = %s'
-        cursor.execute(query, (fullName, id,))
-    elif id != -1:  
-        query = 'SELECT * FROM users WHERE id = %s'
-        cursor.execute(query, (id,))
-    elif fullName.strip():
-        query = 'SELECT * FROM users WHERE fullName = %s'
-        cursor.execute(query, (fullName,))
-    else:
-        query = 'SELECT * FROM users'
-        cursor.execute(query)
-
-    result = cursor.fetchall()
-    cursor.close()
-    conn.close()
-
-    if not result:
-        return -1
-
-    return result
-
-
-def is_bcrypt_hash(s):
-    """
-    Heuristically checks if a string appears to be a bcrypt hash.
-    This is NOT a foolproof method and should be used with caution.
-    """
-    if not isinstance(s, str):
-        return False
-    
-    # Bcrypt hashes are usually 60 characters long (for a cost of 12)
-    # and start with $2a$, $2b$, or $2y$ followed by the cost factor.
-    # A common length for a bcrypt hash is 60 characters.
-    if len(s) == 60 and s.startswith(("$2a$", "$2b$", "$2y$")):
-        parts = s.split('$')
-        if len(parts) == 4 and parts[0] == '' and parts[1] in ('2a', '2b', '2y'):
-            try:
-                # Check if the cost factor is a valid integer
-                cost = int(parts[2])
-                if 4 <= cost <= 31: # Bcrypt cost factors typically range from 4 to 31
-                    return True
-            except ValueError:
-                pass
-    return False
-
-
-def updateUserInfo(userObj, updates: dict):
-
-    print(updates)
-
-    for field, value in updates.items():
-        if field == "password":
-            if not is_bcrypt_hash(value): # Only hash if it's not already hashed
-                hashed_password = bcrypt.hashpw(value.encode('utf-8'), bcrypt.gensalt())
-                updates[field] = hashed_password.decode('utf-8')
+    def browse_csv(self,training):
+        file_path = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+        if file_path:
+            self.csv_path = file_path
+            self.csv_label.config(text=f"Selected File: {file_path}")
+            if training:
+                if not self.run_model_button_is_visible:
+                    self.run_model_button.pack(pady=10)
+                    self.run_model_button_is_visible = True
             else:
-                # If it's already a bcrypt hash, assume it's valid and use it as is.
-                # In a real-world scenario, you might want to log this or have a policy
-                # that updates always provide plaintext for hashing.
-                print("HASHED")
-                pass # The value is already hashed, no need to re-hash.
-
-        if field != "description":
-            if hasattr(userObj, field):
-                setattr(userObj, field, value)
-
-    if "description" in updates:
-        userObj.description = updates["description"]
-        del updates["description"]
+                self.display_model_table()  # Show models when CSV is selected
 
 
-    conn = connect()
-    cursor = conn.cursor()
+
+    def display_model_table(self):
+        # --- Separate patient name section ---
+        self.patient_name_section = tk.Frame(self.center_csv_frame, bg="white")
+        self.patient_name_section.pack(pady=(10, 5))
+
+        tk.Label(self.patient_name_section, text="Please enter patient name:",
+                font=("Segoe UI", 11, "bold"), bg="white", fg="black").pack(side="left", padx=(0, 10))
+
+        self.patient_name_var = tk.StringVar()
+        tk.Entry(self.patient_name_section, textvariable=self.patient_name_var, width=30).pack(side="left")
+
+        # --- Model table section ---
+        self.model_table_container = tk.Frame(self.center_csv_frame, bg="white")
+        self.model_table_container.pack(padx=20, pady=10, fill="both", expand=True)
+
+        canvas = tk.Canvas(self.model_table_container, width=750, height=250, bg="white")
+        scrollbar = ttk.Scrollbar(self.model_table_container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg="white")
+
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Table headers
+        headers = ["ID", "Model Name", "Author ID", "Actions"]
+        for col, header in enumerate(headers):
+            tk.Label(scrollable_frame, text=header, font=("Segoe UI", 10, "bold"),
+                    bg="#dbeafe", fg="black", borderwidth=1, relief="solid",
+                    padx=5, pady=5).grid(row=0, column=col, sticky="nsew")
+
+        # Table rows
+        model_list = self.User.getModels(-1, "")
+        for row_idx, model in enumerate(model_list, start=1):
+            fields = [model.id, model.model_name, model.idM]
+            for col_idx, field in enumerate(fields):
+                tk.Label(scrollable_frame, text=str(field), bg="white", fg="black",
+                        borderwidth=1, relief="solid", padx=4, pady=4,
+                        anchor="w", justify="left").grid(row=row_idx, column=col_idx, sticky="nsew")
+
+            # Action buttons
+            action_frame = tk.Frame(scrollable_frame, bg="white")
+            action_frame.grid(row=row_idx, column=len(fields), padx=4, pady=4)
+
+            tk.Button(action_frame, text="Delete", width=6,
+                    command=lambda mid=model: self.delete_model(mid)).pack(side="left", padx=2)
+
+            def run_model_wrapper(model_obj=model):
+                patient_name = self.patient_name_var.get().strip()
+                print(f"Running model {model_obj.id} for patient: '{patient_name}'")  # Just stores it for now
+                self.run_model_with_csv(model_obj,patient_name)
+
+            tk.Button(action_frame, text="Run", width=6,
+                    command=run_model_wrapper).pack(side="left", padx=2)
+            
+    def delete_model(self, model):
+        if model.idM is not None:
+            confirm = messagebox.askyesno("Delete Model", f"Are you sure you want to delete model ID {model.id}?")
+            if confirm:
+                DB.delete_model_from_db(model.id)
+                print(f"Deleted model with ID {model.id}.")
+                messagebox.showinfo("Model Deleted", f"Model ID {model.id} was successfully deleted.")
+                self.display_model_table()  # Refresh the model table
+        else:
+            messagebox.showinfo("Error!","Original model cannot be deleted!!")
+
+    def run_model_with_csv(self, model,patient_name):
+        try:
+            res = model.predict_health_status(self.csv_path, self.User.idP,patient_name)
+            print(f"Run model ID {model.id} on selected CSV {self.csv_path} result -> {res}.")
+
+            # Clear the screen
+            self.clear_frame()
+
+            # Center frame like in show_admin_page
+            center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+            center_frame.place(relx=0.5, rely=0.5, anchor='center')
+
+            # Result label styled similarly
+            tk.Label(
+                center_frame,
+                text=f"Model prediction result:\n{res}",
+                font=("Arial", 20, "bold"),
+                bg="white",
+                fg=self.bg_color,
+                padx=30,
+                pady=20,
+                bd=2,
+                relief="groove"
+            ).pack(pady=(0, 30))
+
+            # Image frame
+            img_frame = tk.Frame(center_frame, bg="white")
+            img_frame.pack()
+
+            # Load and display two images side by side
+            image_dir = "prediction_plots"
+            png_files = sorted(glob.glob(os.path.join(image_dir, "*.png")))
+
+            if png_files:
+                img = Image.open(png_files[0]).resize((650, 600))
+
+            tk_img = ImageTk.PhotoImage(img)
+
+            label_img = tk.Label(img_frame, image=tk_img, bg="white", bd=2, relief="solid")
+            label_img.image = tk_img
+            label_img.pack(side="left", padx=10)
+
+            # Home button below images
+            def go_home():
+                self.clear_frame()
+                self.show_user_page()
+
+            ttk.Button(center_frame, text="Home", style="Exit.TButton", command=go_home).pack(pady=30)
+
+        except Exception as e:
+            self.clear_frame()
+
+            error_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+            error_frame.place(relx=0.5, rely=0.5, anchor='center')
+
+            tk.Label(error_frame, text=f"An error occurred:\n{e}",
+                    font=("Arial", 16), fg="red", bg="white",
+                    padx=20, pady=20, bd=2, relief="groove").pack(pady=10)
+
+            ttk.Button(error_frame, text="Back", style="Exit.TButton", command=self.show_user_page).pack(pady=20)
 
 
-    if updates:
-        set_clause = ", ".join(f"{field} = %s" for field in updates.keys())
-        values = list(updates.values())
-        values.append(userObj.id) 
+    def confirm_exit(self):
+        answer = messagebox.askyesno("Exit Confirmation", "Do you want to log out?")
+        if answer:
+            self.create_widgets()
 
-        query = f"UPDATE users SET {set_clause} WHERE id = %s"
+    def search_results(self):
+        print("Search previous results - placeholder")
+        users_list = self.User.getResults("")
+        for user in users_list:
+            # Update user info using admin
+            fields = [user.id, user.patientName, user.fetalHealth, user.parameters, user.idMo]
+        
 
-        cursor.execute(query, values)
-        conn.commit()
+    def train_model(self):
+        if self.csv_path:
+            model = DB.FetalHealthModel(-1, "", "", self.User.id, "")
+            model.train_new_model(self.csv_path)
 
-    else:
-        print("No fields to update in users.")
+            # Clear screen before showing UI
+            self.clear_frame()
+
+            # Centered content frame
+            center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+            center_frame.place(relx=0.5, rely=0.5, anchor='center')
+
+            # Success label
+            tk.Label(
+                center_frame,
+                text="Model trained successfully!",
+                font=("Arial", 20, "bold"),
+                bg="white",
+                fg=self.bg_color,
+                padx=30,
+                pady=20,
+                bd=2,
+                relief="groove"
+            ).pack(pady=(0, 30))
+
+            # Image frame
+            img_frame = tk.Frame(center_frame, bg="white")
+            img_frame.pack()
+
+            # Load and resize images
+            # Get list of PNG files in the directory (sorted alphabetically)
+            png_files = sorted(glob.glob(os.path.join("model_plots", "*.png")))
+
+            # Make sure at least two images exist
+            if len(png_files) >= 2:
+                img1 = Image.open(png_files[0])
+                img2 = Image.open(png_files[1])
+            img1 = img1.resize((600, 600))
+            img2 = img2.resize((600, 600))
+
+            tk_img1 = ImageTk.PhotoImage(img1)
+            tk_img2 = ImageTk.PhotoImage(img2)
+
+            label_img1 = tk.Label(img_frame, image=tk_img1, bg="white", bd=2, relief="solid")
+            label_img1.image = tk_img1
+            label_img1.pack(side="left", padx=10)
+
+            label_img2 = tk.Label(img_frame, image=tk_img2, bg="white", bd=2, relief="solid")
+            label_img2.image = tk_img2
+            label_img2.pack(side="left", padx=10)
+
+            # Home button
+            def go_home():
+                self.clear_frame()
+                self.show_user_page()
+
+            ttk.Button(center_frame, text="Home", style="Exit.TButton", command=go_home).pack(pady=30)
 
 
-    if userObj.role == "admin":
-        query = "UPDATE administrators SET clearance = %s WHERE user_id = %s"
-    elif userObj.role == "medical":
-        query = "UPDATE medical_personnel SET specialization = %s WHERE user_id = %s"
-    else:
-        query = None
+    def run_model(self):
+        if self.csv_path:
+            messagebox.showinfo("Estimation", f"Running model with:\n{self.csv_path}")
+        else:
+            messagebox.showwarning("No File", "Please select a CSV file first.")
 
-    if query:
-        cursor.execute(query, (userObj.description, userObj.id))
-        conn.commit()
+    def open_create_user_form(self):
+        self.clear_frame()
+        self.current_page = "create_user"
 
-    cursor.close()
-    conn.close()
+        center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        center_frame.place(relx=0.5, rely=0.5, anchor='center')
 
-    print(f"User (id={userObj.id}) updated successfully.")
+        tk.Label(center_frame, text="Create New User", font=("Arial", 28, "bold"),
+                bg="white", fg=self.bg_color, padx=30, pady=10, bd=2, relief="groove").pack(pady=(0, 20))
 
+        fields = ["Full Name", "Username", "Password", "Telephone", "Email", "Address", "Description"]
+        self.create_user_entries = {}
+
+        for field in fields:
+            tk.Label(center_frame, text=field + ":", bg=self.bg_color, fg="white", font=("Segoe UI", 12)).pack()
+            entry = tk.Entry(center_frame, width=40, show="*" if field == "Password" else "")
+            entry.pack(pady=(0, 10))
+            self.create_user_entries[field] = entry
+
+        # Role dropdown
+        tk.Label(center_frame, text="Role:", bg=self.bg_color, fg="white", font=("Segoe UI", 12)).pack()
+        self.role_combobox = ttk.Combobox(center_frame, values=["admin", "medical"], state="readonly", width=37)
+        self.role_combobox.set("medical")
+        self.role_combobox.pack(pady=(0, 20))
+
+        ttk.Button(center_frame, text="Create User", command=self.submit_create_user).pack(pady=(10, 10))
+        ttk.Button(center_frame, text="Back", style="Exit.TButton", command=self.show_admin_page).pack(pady=(0, 10))
+
+
+    def submit_create_user(self):
+        values = {field: self.create_user_entries[field].get().strip() for field in self.create_user_entries}
+        values["Role"] = self.role_combobox.get()
+
+        # Basic validation
+        if not all(values.values()):
+            messagebox.showerror("Input Error", "All fields are required.")
+            return
+        if "@" not in values["Email"]:
+            messagebox.showerror("Input Error", "Invalid email format.")
+            return
+        if len(values["Password"]) < 6:
+            messagebox.showerror("Input Error", "Password must be at least 6 characters.")
+            return
+
+        # Create the appropriate user object
+        if values["Role"] == 'admin':
+            x = DB.Admin(values["Full Name"], values["Username"], values["Password"],
+                        values["Role"], values["Telephone"], values["Email"],
+                        values["Address"], values["Description"], -1, -1)
+        else:
+            x = DB.Medical(values["Full Name"], values["Username"], values["Password"],
+                            values["Role"], values["Telephone"], values["Email"],
+                            values["Address"], values["Description"], -1, -1)
+            
+        print(x.idP)
+
+        # Optional: Save or process the user object
+        messagebox.showinfo("Success", f"New {values['Role']} user created!")
+        self.show_admin_page()
+
+    def search_results(self):
+        self.clear_frame()
+
+        center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        center_frame.place(relx=0.5, rely=0.5, anchor='center')
+        self.center_frame = center_frame  # store it for reuse
+
+        tk.Label(center_frame, text="Search Results", font=("Arial", 28, "bold"),
+                bg="white", fg=self.bg_color, padx=30, pady=10, bd=2, relief="groove").pack(pady=(0, 20))
+
+        search_frame = tk.Frame(center_frame, bg=self.bg_color)
+        search_frame.pack(pady=(0, 10))
+
+        tk.Label(search_frame, text="Search by Patient Name:", bg=self.bg_color,
+                fg="white", font=("Segoe UI", 12)).pack(side="left", padx=(0, 10))
+
+        self.results_search_entry = tk.Entry(search_frame, width=30)
+        self.results_search_entry.pack(side="left", padx=(0, 10))
+
+        ttk.Button(search_frame, text="Search", command=lambda: self.display_results_table(self.results_search_entry.get())).pack(side="left")
+
+        if not hasattr(self, 'results_back_button'):
+            self.results_back_button = ttk.Button(center_frame, text="Back", style="Exit.TButton", command=self.show_admin_page)
+            self.results_back_button.pack(pady=20)
+
+        self.display_results_table("")  # Show all results initially
+
+    def display_results_table(self, filter_text):
+        # Destroy previous table frame if exists
+        if hasattr(self, 'results_table_container') and self.results_table_container.winfo_exists():
+            self.results_table_container.destroy()
+
+        # Create a container with canvas + scrollbar
+        self.results_table_container = tk.Frame(self.center_frame, bg="white")
+        self.results_table_container.pack(padx=20, pady=10, fill="both", expand=True)
+
+        canvas = tk.Canvas(self.results_table_container, width=580, height=400, bg="white")
+        scrollbar = tk.Scrollbar(self.results_table_container, orient="vertical", command=canvas.yview)
+        self.results_table_frame = tk.Frame(canvas, bg="white")
+
+        self.results_table_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=self.results_table_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Table headers
+        headers = ["ID", "Patient Name", "Fetal Health", "Parameters", "ID Model"]
+        for col, header in enumerate(headers):
+            tk.Label(self.results_table_frame, text=header, font=("Segoe UI", 10, "bold"),
+                    bg="#dbeafe", fg="black", borderwidth=1, relief="solid", padx=5, pady=5).grid(row=0, column=col, sticky="nsew")
+
+        results_list = self.User.getResults("") if not filter_text else self.User.getResults(filter_text)
+
+        for row_idx, result in enumerate(results_list, start=1):
+            fields = [result.id, result.patientName, result.fetalHealth, result.parameters, result.idMo]
+            for col_idx, field in enumerate(fields):
+                if headers[col_idx] == "Parameters":
+                    text = str(field)
+                    tk.Label(self.results_table_frame, text=text, bg="white", fg="black", borderwidth=1,
+                            relief="solid", padx=4, pady=4, anchor="w", justify="left",
+                            wraplength=300, width=40).grid(row=row_idx, column=col_idx, sticky="nsew")
+                else:
+                    tk.Label(self.results_table_frame, text=str(field), bg="white", fg="black", borderwidth=1,
+                            relief="solid", padx=4, pady=4, anchor="w", justify="left").grid(row=row_idx, column=col_idx, sticky="nsew")
+
+            action_frame = tk.Frame(self.results_table_frame, bg="white")
+            action_frame.grid(row=row_idx, column=len(fields), padx=4, pady=4)
+
+
+        # Destroy previous back button if exists
+        if hasattr(self, 'results_back_button') and self.results_back_button.winfo_exists():
+            self.results_back_button.destroy()
+
+        # Recreate Back button
+        self.results_back_button = ttk.Button(self.center_frame, text="Back", style="Exit.TButton", command=self.show_user_page)
+        self.results_back_button.pack(pady=20)
+     
+
+
+    def lookup_user_data(self):
+        self.clear_frame()
+
+        center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        center_frame.place(relx=0.5, rely=0.5, anchor='center')
+        self.center_frame = center_frame  # store it for reuse
+
+        tk.Label(center_frame, text="User Database", font=("Arial", 28, "bold"),
+                bg="white", fg=self.bg_color, padx=30, pady=10, bd=2, relief="groove").pack(pady=(0, 20))
+
+        search_frame = tk.Frame(center_frame, bg=self.bg_color)
+        search_frame.pack(pady=(0, 10))
+
+        tk.Label(search_frame, text="Search by Name:", bg=self.bg_color, fg="white", font=("Segoe UI", 12)).pack(side="left", padx=(0, 10))
+
+        self.search_entry = tk.Entry(search_frame, width=30)
+        self.search_entry.pack(side="left", padx=(0, 10))
+
+        ttk.Button(search_frame, text="Search", command=lambda: self.display_user_table(self.search_entry.get())).pack(side="left")
+
+        # Create Back button once
+        if not hasattr(self, 'lookup_back_button'):
+            self.lookup_back_button = ttk.Button(center_frame, text="Back", style="Exit.TButton", command=self.show_admin_page)
+            self.lookup_back_button.pack(pady=20)
+
+        self.display_user_table("")  # show all users initially
+
+    def display_user_table(self, filter_text):
+        # Destroy previous table frame if exists
+        if hasattr(self, 'table_container') and self.table_container.winfo_exists():
+            self.table_container.destroy()
+
+        # Outer container
+        self.table_container = tk.Frame(self.center_frame, bg="white")
+        self.table_container.pack(padx=20, pady=10, fill="both", expand=True)
+
+        # Canvas with scrollbar
+        canvas = tk.Canvas(self.table_container, width=875, height=400, bg="white")
+        scrollbar = ttk.Scrollbar(self.table_container, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg="white")
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # Table headers
+        headers = ["ID", "Name", "Phone", "Username", "Role", "Address", "Email", "Description", "Actions"]
+        for col, header in enumerate(headers):
+            tk.Label(scrollable_frame, text=header, font=("Segoe UI", 10, "bold"),
+                    bg="#dbeafe", fg="black", borderwidth=1, relief="solid", padx=5, pady=5).grid(row=0, column=col, sticky="nsew")
+
+        # User rows
+        users_list = self.User.getUsers("", -1) if not filter_text else self.User.getUsers(filter_text, -1)
+
+        for row_idx, user in enumerate(users_list, start=1):
+            fields = [user.id, user.fullName, user.telephone, user.userName, user.role,
+                    user.address, user.email, user.description]
+            for col_idx, field in enumerate(fields):
+                tk.Label(scrollable_frame, text=str(field), bg="white", fg="black", borderwidth=1,
+                        relief="solid", padx=4, pady=4, anchor="w", justify="left").grid(row=row_idx, column=col_idx, sticky="nsew")
+
+            action_frame = tk.Frame(scrollable_frame, bg="white")
+            action_frame.grid(row=row_idx, column=len(fields), padx=4, pady=4)
+
+            tk.Button(action_frame, text="Edit", width=6,
+                    command=lambda userObj=user: self.editUser(userObj)).pack(side="left", padx=2)
+            tk.Button(action_frame, text="Delete", width=6,
+                    command=lambda uid=user.id: self.deleteUser(uid)).pack(side="left", padx=2)
+
+        # Destroy previous back button if exists
+        if hasattr(self, 'lookup_back_button') and self.lookup_back_button.winfo_exists():
+            self.lookup_back_button.destroy()
+
+        # Back button
+        self.lookup_back_button = ttk.Button(self.center_frame, text="Back", style="Exit.TButton", command=self.show_admin_page)
+        self.lookup_back_button.pack(pady=20)
+
+
+
+    def editUser(self, userObj):
+        self.clear_frame()
+        self.current_page = "edit_user"
+
+        user = userObj
+
+        center_frame = tk.Frame(self.main_frame, bg=self.bg_color)
+        center_frame.place(relx=0.5, rely=0.5, anchor='center')
+
+        tk.Label(center_frame, text="Edit User", font=("Arial", 28, "bold"),
+                bg="white", fg=self.bg_color, padx=30, pady=10, bd=2, relief="groove").pack(pady=(0, 20))
+
+        fields = ["fullName", "username", "password", "telephone", "email", "address", "description"]
+        field_attr_map = {
+            "fullName": "fullName",
+            "username": "userName",
+            "password": "password",
+            "telephone": "telephone",
+            "email": "email",
+            "address": "address",
+            "description": "description"
+        }
+
+        self.edit_user_entries = {}
+
+        for field in fields:
+            tk.Label(center_frame, text=field + ":", bg=self.bg_color, fg="white", font=("Segoe UI", 12)).pack()
+            entry = tk.Entry(center_frame, width=40, show="*" if field == "password" else "")
+            entry.pack(pady=(0, 10))
+
+            value = getattr(user, field_attr_map[field], "")
+            entry.insert(0, value)
+            self.edit_user_entries[field] = entry
+
+        # Role dropdown
+        tk.Label(center_frame, text="role:", bg=self.bg_color, fg="white", font=("Segoe UI", 12)).pack()
+        self.edit_role_combobox = ttk.Combobox(center_frame, values=["admin", "medical"], state="readonly", width=37)
+        self.edit_role_combobox.set(user.role)
+        self.edit_role_combobox.pack(pady=(0, 20))
+
+        ttk.Button(center_frame, text="Save Changes", command=lambda: self.update_user(user)).pack(pady=(10, 10))
+        ttk.Button(center_frame, text="Back", style="Exit.TButton", command=self.lookup_user_data).pack(pady=(0, 10))
     
-def deleteUser(idU):
-    conn = connect()
-    cursor = conn.cursor()
+    def update_user(self, user):
+        values = {field: self.edit_user_entries[field].get().strip() for field in self.edit_user_entries}
+        values["role"] = self.edit_role_combobox.get()
+
+        # Basic validation
+        if not all(values.values()):
+            messagebox.showerror("Input Error", "All fields are required.")
+            return
+        if "@" not in values["email"]:
+            messagebox.showerror("Input Error", "Invalid email format.")
+            return
+        if len(values["password"]) < 6:
+            messagebox.showerror("Input Error", "Password must be at least 6 characters.")
+            return
+
+        # Update the user
+        self.User.updateUser(user,values)
+
+        # Example saving logic (uncomment if applicable)
+        # x.update()
+
+        messagebox.showinfo("Success", f"User ID {user.id} updated successfully!")
+        self.lookup_user_data()
 
 
-    query = 'SELECT role FROM users WHERE id = %s'
-    cursor.execute(query, (idU,))
-    result = cursor.fetchone()
+    def deleteUser(self, user_id):
+        print(f"Delete user {user_id}")
+        confirm = messagebox.askyesno("Delete User", f"Are you sure you want to delete user ID {user_id}?")
+        if confirm:
+            self.User.delete(user_id)
+            messagebox.showinfo("Success", f"User ID {user_id} successfully deleted.")
+            self.display_user_table("")  # Replace this with your actual function that shows the users page
 
-    role = result[0]
-
-    query = "DELETE FROM users WHERE id = %s"
-    cursor.execute(query, (idU,))
-    conn.commit()
-
-    query = "ALTER TABLE users AUTO_INCREMENT = %s"
-    cursor.execute(query,(idU-1,))
-    conn.commit()
-
-    if role == "admin":
-        query = "ALTER TABLE administrators AUTO_INCREMENT = %s"
-    else:
-        query = "ALTER TABLE medical_personnel AUTO_INCREMENT = %s"
-
-    cursor.execute(query,(idU-1,))
-    conn.commit()
-
-    print("User deleted successfully\n")
-
-
-def create_model_in_db(name, parameters_json_string, maker_id, model_data_blob):
-    """
-    Δημιουργεί μια νέα εγγραφή μοντέλου στη βάση δεδομένων με τα δυαδικά δεδομένα του μοντέλου.
-    """
-    conn = connect()
-    cursor = conn.cursor()
-
-    query = "SELECT id FROM medical_personnel WHERE user_id = %s"
-
-    cursor.execute(query, (maker_id,))
-    result = cursor.fetchone()
-
-    maker_id = result[0]
-
-
-    query = """
-        INSERT INTO model (name, parameters, maker, model_data) 
-        VALUES (%s, %s, %s, %s)
-    """
-
-    data = (name, parameters_json_string, maker_id, model_data_blob)
-    cursor.execute(query, data)
-    conn.commit()
-
-    model_id = cursor.lastrowid
-
-    cursor.close()
-    conn.close()
-
-    print(f"Model '{name}' inserted successfully with ID: {model_id}!")
-
-    return model_id
-
-
-def get_models_from_db(model_id=None, name=None, maker_id=None):
-    """
-    Ανακτά μοντέλα από τη βάση δεδομένων. Μπορεί να φιλτράρει με ID, όνομα ή ID κατασκευαστή.
-    Επιστρέφει μια λίστα από tuples, όπου κάθε tuple περιέχει (id, name, parameters, maker, model_data).
-    """
-    conn = connect()
-    cursor = conn.cursor()
-
-
-    query = "SELECT id, name, parameters, maker, model_data FROM model WHERE 1=1"
-    params = []
-
-    if model_id is not None and model_id != -1:
-        query += " AND id = %s " 
-        params.append(model_id)
-    if name is not None and name.strip():
-        query += " AND name LIKE %s"
-        params.append(f"%{name}%")
-    if maker_id is not None and maker_id != -1:
-        query += " AND maker = %s"
-        params.append(maker_id)
-    if model_id is None or model_id == -1:
-        query += " OR id = 1"
-
-    cursor.execute(query, tuple(params))
-    result = cursor.fetchall()
-    
-
-    cursor.close()
-    conn.close()
-
-
-    if not result:
-        return []
-
-    return result
-
-def delete_model_from_db(model_id):
-    """
-    Διαγράφει μια εγγραφή μοντέλου από τη βάση δεδομένων με βάση το ID.
-    """
-    conn = connect()
-    cursor = conn.cursor()
-
-    query = "DELETE FROM model WHERE id = %s"
-    cursor.execute(query, (model_id,))
-    conn.commit()
-
-    query = "ALTER TABLE model AUTO_INCREMENT = %s"
-    cursor.execute(query,(model_id-1,))
-    conn.commit()
-
-    cursor.close()
-    conn.close()
-    print(f"Model ID: {model_id} deleted from database.")
-
-
-
-#ALTER TABLE users AUTO_INCREMENT = 1;
+# Run the application
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = GUI(root)
+    root.mainloop()
