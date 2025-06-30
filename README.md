@@ -65,7 +65,7 @@
 
 1.  **Κλωνοποιήστε το repository:**
     ```bash
-    git clone https://github.com/your-username/fetal-health-classification.git
+    git clone https://github.com/ilias-stath/Fetal-Diagnosis-Enhancement
     cd fetal-health-classification
     ```
 
